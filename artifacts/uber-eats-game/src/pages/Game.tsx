@@ -6,7 +6,7 @@ declare global {
   }
 }
 
-type GamePhase = "idle" | "to-restaurant" | "at-restaurant" | "to-customer" | "delivered";
+type GamePhase = "idle" | "cancelled" | "to-restaurant" | "at-restaurant" | "to-customer" | "delivered";
 
 const NOTTINGHAM: [number, number] = [52.9541, -1.155];
 const RESTAURANT: [number, number] = [52.958, -1.15];
@@ -94,6 +94,35 @@ export default function Game() {
   const [phase, setPhase] = useState<GamePhase>("idle");
   const [eta, setEta] = useState("");
   const [earnings] = useState("£8.45");
+  const [countdown, setCountdown] = useState(5);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (phase !== "idle") return;
+    setCountdown(5);
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current!);
+          handleCancel();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [phase]);
+
+  function handleCancel() {
+    if (countdownRef.current) clearInterval(countdownRef.current);
+    setPhase("cancelled" as GamePhase);
+    setTimeout(() => {
+      setPhase("idle");
+      setCountdown(5);
+    }, 1500);
+  }
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -147,6 +176,7 @@ export default function Game() {
   }, []);
 
   function startDelivery() {
+    if (countdownRef.current) clearInterval(countdownRef.current);
     driverPosRef.current = DRIVER_START;
     phaseRef.current = "to-restaurant";
     setPhase("to-restaurant");
@@ -286,7 +316,7 @@ export default function Game() {
         position: "absolute", bottom: 0, left: 0, right: 0,
         zIndex: 1000,
       }}>
-        {phase === "idle" && <IdlePanel onStart={startDelivery} earnings={earnings} />}
+        {(phase === "idle" || phase === "cancelled") && <IdlePanel onStart={startDelivery} onCancel={handleCancel} earnings={earnings} countdown={countdown} cancelled={phase === "cancelled"} />}
         {phase === "to-restaurant" && <HeadingToRestaurantPanel eta={eta} />}
         {phase === "at-restaurant" && <AtRestaurantPanel onPickup={confirmPickup} />}
         {phase === "to-customer" && <HeadingToCustomerPanel eta={eta} />}
@@ -391,7 +421,28 @@ function AddressRow({ icon, label, address, color }: { icon: string; label: stri
   );
 }
 
-function IdlePanel({ onStart, earnings }: { onStart: () => void; earnings: string }) {
+function IdlePanel({ onStart, onCancel, earnings, countdown, cancelled }: {
+  onStart: () => void;
+  onCancel: () => void;
+  earnings: string;
+  countdown: number;
+  cancelled: boolean;
+}) {
+  const circumference = 2 * Math.PI * 18;
+  const dashOffset = circumference - (countdown / 5) * circumference;
+
+  if (cancelled) {
+    return (
+      <Panel>
+        <div style={{ padding: "24px 20px 28px", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+          <div style={{ fontSize: 36 }}>🚫</div>
+          <div style={{ color: "#fff", fontWeight: 700, fontSize: 18 }}>Order Declined</div>
+          <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Looking for the next delivery...</div>
+        </div>
+      </Panel>
+    );
+  }
+
   return (
     <Panel>
       <div style={{ padding: "0 20px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -417,7 +468,7 @@ function IdlePanel({ onStart, earnings }: { onStart: () => void; earnings: strin
         <AddressRow icon="🏠" label="Dropoff" address="42 Castle Blvd, Nottingham" color="#276EF1" />
       </div>
 
-      <div style={{ padding: "16px 20px 28px", display: "flex", gap: 12 }}>
+      <div style={{ padding: "16px 20px 28px", display: "flex", gap: 12, alignItems: "center" }}>
         <button className="uber-btn" onClick={onStart} style={{
           flex: 1, background: "#06C167", border: "none", borderRadius: 12,
           color: "#fff", fontWeight: 700, fontSize: 16, padding: "16px",
@@ -425,12 +476,29 @@ function IdlePanel({ onStart, earnings }: { onStart: () => void; earnings: strin
         }}>
           Accept Delivery
         </button>
-        <button className="uber-btn" style={{
-          width: 52, background: "#2a2a2a", border: "none", borderRadius: 12,
-          color: "rgba(255,255,255,0.5)", fontWeight: 700, fontSize: 20,
-          cursor: "pointer",
-        }}>
-          ✕
+
+        <button
+          className="uber-btn"
+          onClick={onCancel}
+          style={{
+            width: 56, height: 56, background: "#2a2a2a", border: "none", borderRadius: 12,
+            color: "rgba(255,255,255,0.7)", fontWeight: 700, fontSize: 18,
+            cursor: "pointer", position: "relative", display: "flex",
+            alignItems: "center", justifyContent: "center", flexShrink: 0,
+          }}
+        >
+          <svg width="56" height="56" viewBox="0 0 56 56" style={{ position: "absolute", inset: 0, transform: "rotate(-90deg)" }}>
+            <circle cx="28" cy="28" r="18" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="3" />
+            <circle
+              cx="28" cy="28" r="18" fill="none"
+              stroke="#e53935" strokeWidth="3"
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+              strokeLinecap="round"
+              style={{ transition: "stroke-dashoffset 0.9s linear" }}
+            />
+          </svg>
+          <span style={{ position: "relative", zIndex: 1, fontSize: 16, color: "#e53935", fontWeight: 700 }}>✕</span>
         </button>
       </div>
     </Panel>

@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Uber Eats Game"
+version = "1.0.0"
+id = "artifacts/uber-eats-game"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21934
+
+[services.development]
+run = "pnpm --filter @workspace/uber-eats-game run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/uber-eats-game", "run", "build" ]
+publicDir = "artifacts/uber-eats-game/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21934"
+BASE_PATH = "/"

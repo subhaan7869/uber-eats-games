@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { playNewOrder, playAccept, playDecline, playArrived, playDelivered, playRankUp, playTap } from "../sounds";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -323,6 +324,7 @@ export default function Game() {
   const moveInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pingInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressRef = useRef(0);
   const totalStepsRef = useRef(100);
 
@@ -352,7 +354,8 @@ export default function Game() {
   function clearAll() {
     if (moveInterval.current) clearInterval(moveInterval.current);
     if (countdownInterval.current) clearInterval(countdownInterval.current);
-    moveInterval.current = null; countdownInterval.current = null;
+    if (pingInterval.current) clearInterval(pingInterval.current);
+    moveInterval.current = null; countdownInterval.current = null; pingInterval.current = null;
   }
 
   const spawnOrder = useCallback(() => {
@@ -363,12 +366,19 @@ export default function Game() {
     phaseRef.current = "incoming";
     setPhase("incoming");
     setCountdown(5);
+
+    // Play new order ping immediately, then repeat every 1.2s during countdown
+    playNewOrder();
+    if (pingInterval.current) clearInterval(pingInterval.current);
+    pingInterval.current = setInterval(() => playNewOrder(), 1200);
+
     if (countdownInterval.current) clearInterval(countdownInterval.current);
     countdownInterval.current = setInterval(() => {
       setCountdown(prev => {
         if (prev <= 1) {
           clearInterval(countdownInterval.current!);
           countdownInterval.current = null;
+          if (pingInterval.current) { clearInterval(pingInterval.current); pingInterval.current = null; }
           handleDecline();
           return 0;
         }
@@ -379,6 +389,8 @@ export default function Game() {
 
   const handleDecline = useCallback(() => {
     if (countdownInterval.current) { clearInterval(countdownInterval.current); countdownInterval.current = null; }
+    if (pingInterval.current) { clearInterval(pingInterval.current); pingInterval.current = null; }
+    playDecline();
     phaseRef.current = "cancelled"; setPhase("cancelled");
     setTimeout(() => {
       if (phaseRef.current !== "cancelled") return;
@@ -409,12 +421,15 @@ export default function Game() {
   const handleAccept = useCallback(() => {
     if (!order) return;
     if (countdownInterval.current) { clearInterval(countdownInterval.current); countdownInterval.current = null; }
+    if (pingInterval.current) { clearInterval(pingInterval.current); pingInterval.current = null; }
+    playAccept();
     phaseRef.current = "to-restaurant"; setPhase("to-restaurant");
     const steps = Math.floor(rand(40, 90));
     startMoving("to-restaurant", steps);
   }, [order]);
 
   const handlePickedUp = useCallback(() => {
+    playTap();
     phaseRef.current = "to-customer"; setPhase("to-customer");
     const steps = Math.floor(rand(50, 100));
     startMoving("to-customer", steps);
@@ -427,10 +442,16 @@ export default function Game() {
     const newRank = getRank(newCount);
     setTripCount(newCount);
     setTotalEarnings(e => parseFloat((e + order.total + currentTip).toFixed(2)));
-    if (newRank.name !== prevRank.name) setRankedUp(newRank);
+    if (newRank.name !== prevRank.name) {
+      setRankedUp(newRank);
+      setTimeout(() => playRankUp(), 400);
+    } else {
+      playDelivered();
+    }
   }, [order, tripCount, currentTip]);
 
   useEffect(() => {
+    if (phase === "at-restaurant") playArrived();
     if (phase === "delivered") handleDeliveryComplete();
   }, [phase]);
 
@@ -442,6 +463,7 @@ export default function Game() {
   }, [spawnOrder]);
 
   const goOnline = useCallback(() => {
+    playTap();
     phaseRef.current = "waiting"; setPhase("waiting");
     setTimeout(spawnOrder, rand(1500, 3000));
   }, [spawnOrder]);

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { playNewOrder, playAccept, playDecline, playArrived, playDelivered, playRankUp, playTap } from "../sounds";
+import { playNewOrder, playAccept, playDecline, playArrived, playDelivered, playRankUp, playTap, playMessage } from "../sounds";
 import type { DriverProfile } from "./Onboarding";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -10,6 +10,20 @@ interface MenuItem { name: string; price: number; }
 interface Restaurant { name: string; emoji: string; color: string; address: string; menu: MenuItem[]; }
 interface Customer { name: string; rating: number; address: string; orders: number; }
 interface Order { restaurant: Restaurant; customer: Customer; items: MenuItem[]; total: number; distance: string; duration: string; }
+interface ChatMessage { id: number; from: "driver" | "customer"; text: string; time: string; }
+
+const QUICK_REPLIES = [
+  { text: "I'm on my way! 🚗", response: "Great, thanks! See you soon 😊" },
+  { text: "Running a few minutes late, sorry!", response: "No worries, take your time!" },
+  { text: "I can't find your address — can you help?", response: `I'm at ${""} — just ring the bell please!` },
+  { text: "I'm outside your building 📦", response: "Coming down now, thank you! 🙏" },
+  { text: "Almost there!", response: "👍 Thanks!" },
+  { text: "There's been an issue with your order", response: "Oh no — what happened? Let me know if I need to do anything." },
+];
+
+const CUSTOMER_AVATARS = ["👨", "👩", "🧑", "👱", "🧔", "👩‍🦱", "👨‍🦳", "🧕"];
+function customerAvatar(name: string) { return CUSTOMER_AVATARS[name.charCodeAt(0) % CUSTOMER_AVATARS.length]; }
+function nowTime() { return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
 
 // ─── Rank System ──────────────────────────────────────────────────────────────
 

@@ -97,3 +97,11 @@ export function playTap() {
   tone(1200, now, 0.05, 0.15, "sine", ac);
   click(ac, now, 0.08);
 }
+
+/** Incoming message from customer */
+export function playMessage() {
+  const ac = getCtx();
+  const now = ac.currentTime;
+  tone(1568, now,        0.06, 0.25, "sine", ac);
+  tone(1865, now + 0.08, 0.10, 0.30, "sine", ac);
+}

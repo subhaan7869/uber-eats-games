@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Account Creation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+        }
+        h2 {
+            text-align: center;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #idCard {
+            display: none;
+            margin-top: 20px;
+            text-align: center;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Create Account</h2>
+        <input type="text" id="name" placeholder="Enter your name" required>
+        <input type="password" id="password" placeholder="Create a password" required>
+        <button onclick="createAccount()">Create Account</button>
+
+        <div id="idCard">
+            <h2>Driver ID Card</h2>
+            <p><strong>Name:</strong> <span id="cardName"></span></p>
+            <p><strong>Driver ID:</strong> <span id="driverId"></span></p>
+            <p><strong>Level:</strong> 1</p>
+            <button onclick="alert('Take a screenshot of your ID card!')">Screenshot ID Card</button>
+        </div>
+    </div>
+
+    <script>
+        function createAccount() {
+            const name = document.getElementById('name').value;
+            const password = document.getElementById('password').value;
+            
+            if (name && password) {
+                // Generate a unique Driver ID
+                const driverId = 'DRV-' + Math.floor(Math.random() * 1000000);
+
+                // Save to local storage
+                const account = {
+                    name: name,
+                    driverId: driverId,
+                    level: 1,
+                    deliveries: 0,
+                    password: password // (Note: In real apps, don't store plain passwords!)
+                };
+                localStorage.setItem('account', JSON.stringify(account));
+
+                // Fill ID card
+                document.getElementById('cardName').innerText = name;
+                document.getElementById('driverId').innerText = driverId
+            

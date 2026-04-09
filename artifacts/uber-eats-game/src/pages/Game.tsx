@@ -520,13 +520,21 @@ function SideMenu({ isOpen, profile, earnings, tripCount, onClose, onUpdateProfi
 
 // ─── Verification Modal ───────────────────────────────────────────────────────
 
-function VerificationModal({ driverCode, onSuccess, onFail }: { driverCode: string; onSuccess: () => void; onFail: () => void }) {
-  const [input, setInput] = useState("");
-  const [error, setError] = useState("");
-  const [attempts, setAttempts] = useState(0);
+function VerificationModal({ profile, onSuccess, onFail }: {
+  profile: DriverProfile; onSuccess: () => void; onFail: () => void;
+}) {
+  const [input, setInput]           = useState("");
+  const [error, setError]           = useState("");
+  const [attempts, setAttempts]     = useState(0);
+  const [showForgot, setShowForgot] = useState(false);
+  const [forgotName, setForgotName] = useState("");
+  const [forgotPass, setForgotPass] = useState("");
+  const [forgotErr, setForgotErr]   = useState("");
+  const [revealed, setRevealed]     = useState(false);
+  const [shownCode, setShownCode]   = useState(profile.driverCode);
 
   function handleVerify() {
-    if (input.trim().toUpperCase() === driverCode) { onSuccess(); return; }
+    if (input.trim().toUpperCase() === shownCode) { onSuccess(); return; }
     const next = attempts + 1;
     setAttempts(next);
     setError(`Incorrect code. ${3 - next > 0 ? `${3 - next} attempt${3 - next !== 1 ? "s" : ""} remaining.` : "Access blocked."}`);
@@ -534,19 +542,104 @@ function VerificationModal({ driverCode, onSuccess, onFail }: { driverCode: stri
     if (next >= 3) setTimeout(onFail, 1200);
   }
 
+  function handleForgotVerify() {
+    const nameOk = forgotName.trim().toLowerCase() === profile.name.trim().toLowerCase();
+    const passOk = forgotPass === profile.password;
+    if (nameOk && passOk) { setForgotErr(""); setRevealed(true); }
+    else setForgotErr("Name or password didn't match.");
+  }
+
+  function handleResetCode() {
+    const num = Math.floor(100000 + Math.random() * 900000);
+    const code = `DRV-${num}`;
+    setShownCode(code);
+    const updated = { ...profile, driverCode: code };
+    localStorage.setItem("uber_eats_driver_profile", JSON.stringify(updated));
+  }
+
+  function handleUseCode() {
+    setInput(shownCode);
+    setShowForgot(false);
+    setRevealed(false);
+    setForgotName("");
+    setForgotPass("");
+  }
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px" }}>
-      <div style={{ background: "#111", borderRadius: 22, padding: "30px 24px", width: "100%", maxWidth: 360, border: "1px solid rgba(255,255,255,0.08)" }}>
-        <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 18px" }}>🔒</div>
-        <div style={{ color: "#fff", fontWeight: 800, fontSize: 20, textAlign: "center", marginBottom: 6 }}>Identity Check</div>
-        <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, textAlign: "center", marginBottom: 24 }}>Enter your driver code to continue</div>
-        <input autoFocus value={input} onChange={e => { setInput(e.target.value.toUpperCase()); setError(""); }}
-          placeholder="DRV-000000" onKeyDown={e => e.key === "Enter" && input.trim() && handleVerify()}
-          style={{ width: "100%", boxSizing: "border-box", background: "#1a1a1a", border: error ? "2px solid #FF3B30" : "2px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "16px", color: "#fff", fontSize: 18, fontWeight: 700, caretColor: "#06C167", fontFamily: "monospace", letterSpacing: "0.08em" }} />
-        {error && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8 }}>{error}</div>}
-        <button onClick={handleVerify} disabled={!input.trim() || attempts >= 3} style={{ width: "100%", marginTop: 16, background: input.trim() && attempts < 3 ? "#06C167" : "#222", border: "none", borderRadius: 100, color: "#fff", fontWeight: 800, fontSize: 16, padding: "16px", cursor: input.trim() && attempts < 3 ? "pointer" : "default" }}>
-          Verify Identity
-        </button>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", backdropFilter: "blur(8px)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px" }}>
+      <div style={{ background: "#111", borderRadius: 22, padding: "28px 22px", width: "100%", maxWidth: 360, border: "1px solid rgba(255,255,255,0.08)", animation: "slideUp 0.2s ease" }}>
+
+        {/* ── Main verify view ── */}
+        {!showForgot && (
+          <>
+            <div style={{ width: 52, height: 52, borderRadius: 14, background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 16px" }}>🔒</div>
+            <div style={{ color: "#fff", fontWeight: 800, fontSize: 20, textAlign: "center", marginBottom: 5 }}>Identity Check</div>
+            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, textAlign: "center", marginBottom: 22 }}>Enter your driver code to continue</div>
+            <input autoFocus value={input} onChange={e => { setInput(e.target.value.toUpperCase()); setError(""); }}
+              placeholder="DRV-000000" onKeyDown={e => e.key === "Enter" && input.trim() && handleVerify()}
+              style={{ width: "100%", boxSizing: "border-box", background: "#1a1a1a", border: error ? "2px solid #FF3B30" : "2px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "16px", color: "#fff", fontSize: 18, fontWeight: 700, caretColor: "#06C167", fontFamily: "monospace", letterSpacing: "0.08em" }} />
+            {error && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8 }}>{error}</div>}
+            <button onClick={handleVerify} disabled={!input.trim() || attempts >= 3}
+              style={{ width: "100%", marginTop: 14, background: input.trim() && attempts < 3 ? "#06C167" : "#222", border: "none", borderRadius: 100, color: "#fff", fontWeight: 800, fontSize: 16, padding: "15px", cursor: input.trim() && attempts < 3 ? "pointer" : "default" }}>
+              Verify Identity
+            </button>
+            <button onClick={() => setShowForgot(true)}
+              style={{ width: "100%", marginTop: 10, background: "none", border: "none", color: "#06C167", fontWeight: 600, fontSize: 14, padding: "8px", cursor: "pointer" }}>
+              Forgot your driver code?
+            </button>
+          </>
+        )}
+
+        {/* ── Forgot: verify by name + password ── */}
+        {showForgot && !revealed && (
+          <>
+            <button onClick={() => { setShowForgot(false); setForgotErr(""); }}
+              style={{ background: "none", border: "none", color: "rgba(255,255,255,0.4)", fontSize: 13, cursor: "pointer", marginBottom: 14, padding: 0 }}>
+              ← Back
+            </button>
+            <div style={{ width: 52, height: 52, borderRadius: 14, background: "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 14px" }}>🔑</div>
+            <div style={{ color: "#fff", fontWeight: 800, fontSize: 18, textAlign: "center", marginBottom: 5 }}>Reset Driver Code</div>
+            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, textAlign: "center", marginBottom: 20 }}>Verify your identity to recover your code</div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ color: "rgba(255,255,255,0.3)", fontSize: 11, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Full Name</label>
+              <input autoFocus value={forgotName} onChange={e => { setForgotName(e.target.value); setForgotErr(""); }}
+                placeholder={profile.name}
+                style={{ width: "100%", boxSizing: "border-box", background: "#1a1a1a", border: "2px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "14px", color: "#fff", fontSize: 15, caretColor: "#06C167" }} />
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ color: "rgba(255,255,255,0.3)", fontSize: 11, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Password</label>
+              <input type="password" value={forgotPass} onChange={e => { setForgotPass(e.target.value); setForgotErr(""); }}
+                onKeyDown={e => e.key === "Enter" && forgotName && forgotPass && handleForgotVerify()}
+                placeholder="Your password"
+                style={{ width: "100%", boxSizing: "border-box", background: "#1a1a1a", border: forgotErr ? "2px solid #FF3B30" : "2px solid rgba(255,255,255,0.07)", borderRadius: 12, padding: "14px", color: "#fff", fontSize: 15, caretColor: "#06C167" }} />
+            </div>
+            {forgotErr && <div style={{ color: "#FF3B30", fontSize: 12, marginBottom: 10 }}>{forgotErr}</div>}
+            <button onClick={handleForgotVerify} disabled={!forgotName.trim() || !forgotPass}
+              style={{ width: "100%", background: forgotName.trim() && forgotPass ? "#06C167" : "#222", border: "none", borderRadius: 100, color: "#fff", fontWeight: 800, fontSize: 15, padding: "15px", cursor: forgotName.trim() && forgotPass ? "pointer" : "default" }}>
+              Verify Identity
+            </button>
+          </>
+        )}
+
+        {/* ── Revealed code view ── */}
+        {showForgot && revealed && (
+          <>
+            <div style={{ width: 52, height: 52, borderRadius: 14, background: "#06C16720", border: "1px solid #06C16740", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 14px" }}>✅</div>
+            <div style={{ color: "#fff", fontWeight: 800, fontSize: 18, textAlign: "center", marginBottom: 5 }}>Identity Verified</div>
+            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, textAlign: "center", marginBottom: 20 }}>Here is your driver code</div>
+            <div style={{ background: "#1a1a1a", borderRadius: 14, padding: "20px", textAlign: "center", border: "2px solid #06C16750", fontFamily: "monospace", fontSize: 26, fontWeight: 900, color: "#06C167", letterSpacing: "0.1em", marginBottom: 14 }}>
+              {shownCode}
+            </div>
+            <button onClick={handleResetCode}
+              style={{ width: "100%", background: "none", border: "1.5px solid rgba(255,255,255,0.12)", borderRadius: 100, color: "rgba(255,255,255,0.5)", fontWeight: 700, fontSize: 14, padding: "13px", cursor: "pointer", marginBottom: 10 }}>
+              🔄 Generate New Code
+            </button>
+            <button onClick={handleUseCode}
+              style={{ width: "100%", background: "#06C167", border: "none", borderRadius: 100, color: "#fff", fontWeight: 800, fontSize: 15, padding: "15px", cursor: "pointer" }}>
+              Use This Code
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -865,7 +958,7 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100dvh", fontFamily: "'Inter',-apple-system,sans-serif", background: "#f2efe9", overflow: "hidden" }}>
 
-      {showVerification && <VerificationModal driverCode={profile.driverCode} onSuccess={() => setShowVerification(false)} onFail={() => { setShowVerification(false); handleGoOffline(); }} />}
+      {showVerification && <VerificationModal profile={profile} onSuccess={() => setShowVerification(false)} onFail={() => { setShowVerification(false); handleGoOffline(); }} />}
 
       <SideMenu isOpen={sideMenuOpen} profile={profile} earnings={totalEarnings} tripCount={tripCount}
         onClose={() => setSideMenuOpen(false)} onUpdateProfile={handleUpdateProfile}

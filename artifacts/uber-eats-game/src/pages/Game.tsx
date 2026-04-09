@@ -12,9 +12,8 @@ interface Customer { name: string; rating: number; address: string; orders: numb
 interface Order {
   id: string; restaurant: Restaurant; customer: Customer; items: MenuItem[];
   total: number; distance: string; duration: string;
-  mapX: number; mapY: number; // position on map
+  mapX: number; mapY: number;
 }
-
 interface BusyZone { id: string; x: number; y: number; r: number; label: string; multiplier: number; }
 
 // ─── Rank System ──────────────────────────────────────────────────────────────
@@ -33,20 +32,20 @@ function rankPct(t: number): number { const r = getRank(t); if (!r.max) return 1
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
 const RESTAURANTS: Restaurant[] = [
-  { name: "McDonald's",  emoji: "🍔", color: "#FF6000", address: "Market Square, Nottingham",
-    menu: [{ name: "Big Mac Meal", price: 7.49 }, { name: "McFlurry", price: 2.19 }, { name: "Chicken McNuggets x6", price: 4.39 }] },
+  { name: "McDonald's",  emoji: "🍔", color: "#DA291C", address: "Market Square, Nottingham",
+    menu: [{ name: "Big Mac Meal", price: 7.49 }, { name: "McFlurry", price: 2.19 }, { name: "Chicken McNuggets ×6", price: 4.39 }] },
   { name: "Burger King", emoji: "👑", color: "#D62300", address: "Upper Parliament St",
     menu: [{ name: "Whopper Meal", price: 8.29 }, { name: "Chicken Royale", price: 6.49 }, { name: "Onion Rings", price: 2.49 }] },
   { name: "KFC",         emoji: "🍗", color: "#E4002B", address: "Clumber Street",
     menu: [{ name: "Zinger Burger Meal", price: 7.99 }, { name: "Bucket for One", price: 9.49 }, { name: "Popcorn Chicken", price: 3.99 }] },
   { name: "Pizza Hut",   emoji: "🍕", color: "#EE3124", address: "Victoria Centre",
-    menu: [{ name: "Pepperoni Passion (M)", price: 13.99 }, { name: "BBQ Chicken (M)", price: 13.49 }, { name: "Dough Balls x8", price: 4.99 }] },
-  { name: "Nando's",     emoji: "🔥", color: "#FF6600", address: "Trinity Square",
-    menu: [{ name: "1/2 Chicken (Hot)", price: 9.75 }, { name: "Peri Peri Wrap", price: 8.25 }, { name: "Peri Fries", price: 3.75 }] },
-  { name: "Subway",      emoji: "🥖", color: "#009743", address: "Derby Road",
-    menu: [{ name: "Foot-long Meatball", price: 7.49 }, { name: "6\" BMT", price: 5.99 }, { name: "Veggie Delite", price: 5.49 }] },
+    menu: [{ name: "Pepperoni Passion (M)", price: 13.99 }, { name: "BBQ Chicken (M)", price: 13.49 }, { name: "Dough Balls ×8", price: 4.99 }] },
+  { name: "Nando's",     emoji: "🔥", color: "#C8102E", address: "Trinity Square",
+    menu: [{ name: "½ Chicken (Hot)", price: 9.75 }, { name: "Peri Peri Wrap", price: 8.25 }, { name: "Peri Fries", price: 3.75 }] },
+  { name: "Subway",      emoji: "🥖", color: "#009A44", address: "Derby Road",
+    menu: [{ name: "Footlong Meatball", price: 7.49 }, { name: "6\" BMT", price: 5.99 }, { name: "Veggie Delite", price: 5.49 }] },
   { name: "Wagamama",    emoji: "🍜", color: "#A00000", address: "Cornerhouse",
-    menu: [{ name: "Chicken Katsu Curry", price: 13.50 }, { name: "Ramen Noodle Bowl", price: 12.95 }, { name: "Gyoza x6", price: 6.50 }] },
+    menu: [{ name: "Chicken Katsu Curry", price: 13.50 }, { name: "Ramen Noodle Bowl", price: 12.95 }, { name: "Gyoza ×6", price: 6.50 }] },
   { name: "Greggs",      emoji: "🥐", color: "#0066CC", address: "Mansfield Road",
     menu: [{ name: "Sausage Roll", price: 1.35 }, { name: "Steak Bake", price: 1.75 }, { name: "Latte", price: 1.75 }] },
 ];
@@ -62,7 +61,6 @@ const TIPS = [0, 0, 0.5, 0.5, 1, 1, 1.5, 2, 2.5];
 const DURATIONS = ["4 min", "6 min", "8 min", "10 min", "12 min", "7 min", "9 min"];
 const DISTANCES = ["0.8 km", "1.2 km", "1.6 km", "2.1 km", "2.4 km", "1.9 km", "3.1 km"];
 
-// Positions on the map for each restaurant
 const RESTAURANT_MAP_POS: Record<string, { x: number; y: number }> = {
   "McDonald's":  { x: 210, y: 230 },
   "Burger King": { x: 240, y: 200 },
@@ -114,186 +112,138 @@ function pickBusyZones(): BusyZone[] {
   return shuffled.slice(0, count).map((z, i) => ({ ...z, id: String(i) }));
 }
 
-// ─── CITY MAP SVG ─────────────────────────────────────────────────────────────
+// ─── CITY MAP ─────────────────────────────────────────────────────────────────
 
 function CityMap({ busyZones, orders, driverPhase, onOrderTap }: {
   busyZones: BusyZone[]; orders: Order[]; driverPhase: Phase; onOrderTap: (o: Order) => void;
 }) {
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "#e9e4db" }}>
+    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", background: "#f5f5f0" }}>
       <svg width="100%" height="100%" viewBox="0 0 440 520" preserveAspectRatio="xMidYMid slice"
            style={{ position: "absolute", inset: 0, display: "block" }}>
 
-        {/* Base */}
-        <rect width="440" height="520" fill="#e9e4db" />
+        <rect width="440" height="520" fill="#f0ece3" />
 
-        {/* === WATER - River Trent === */}
-        <path d="M-10,445 C40,435 100,448 180,440 S300,432 460,442 L460,520 L-10,520 Z" fill="#aacde0" />
-        <path d="M-10,455 C60,445 120,458 200,450 S320,444 460,452" fill="none" stroke="#88adc8" strokeWidth="2" />
+        {/* River Trent */}
+        <path d="M-10,445 C40,435 100,448 180,440 S300,432 460,442 L460,520 L-10,520 Z" fill="#c8dce8" />
+        <path d="M-10,455 C60,445 120,458 200,450 S320,444 460,452" fill="none" stroke="#a8c4d8" strokeWidth="2.5" />
 
-        {/* === PARKS === */}
-        {/* Forest Recreation Ground */}
-        <rect x="8" y="10" width="110" height="80" rx="5" fill="#bdd8a8" stroke="#8eba76" strokeWidth="1.5" />
-        <text x="63" y="47" textAnchor="middle" fontSize="8.5" fill="#4a7a40" fontWeight="700" fontFamily="sans-serif">The Forest</text>
-        <text x="63" y="59" textAnchor="middle" fontSize="7" fill="#5a8a50" fontFamily="sans-serif">Recreation Ground</text>
+        {/* Parks */}
+        <rect x="8" y="10" width="110" height="80" rx="5" fill="#c8ddb0" stroke="#9ec87a" strokeWidth="1.5" />
+        <text x="63" y="47" textAnchor="middle" fontSize="8.5" fill="#3d6b35" fontWeight="700" fontFamily="sans-serif">The Forest</text>
+        <text x="63" y="59" textAnchor="middle" fontSize="7" fill="#4a7a40" fontFamily="sans-serif">Recreation Ground</text>
 
-        {/* Arboretum */}
-        <rect x="335" y="50" width="95" height="60" rx="4" fill="#c4daa8" stroke="#8eba76" strokeWidth="1" />
-        <text x="383" y="82" textAnchor="middle" fontSize="8" fill="#4a7a40" fontWeight="600" fontFamily="sans-serif">Arboretum</text>
+        <rect x="335" y="50" width="95" height="60" rx="4" fill="#cdddb0" stroke="#9ec87a" strokeWidth="1" />
+        <text x="383" y="82" textAnchor="middle" fontSize="8" fill="#3d6b35" fontWeight="600" fontFamily="sans-serif">Arboretum</text>
 
-        {/* The Park estate */}
-        <ellipse cx="88" cy="270" rx="62" ry="50" fill="#c4dab0" stroke="#8eba76" strokeWidth="1.5" />
+        <ellipse cx="88" cy="270" rx="62" ry="50" fill="#c8ddb0" stroke="#9ec87a" strokeWidth="1.5" />
         <text x="88" y="268" textAnchor="middle" fontSize="8" fill="#3a6a30" fontWeight="700" fontFamily="sans-serif">The Park</text>
         <text x="88" y="280" textAnchor="middle" fontSize="7" fill="#4a7a40" fontFamily="sans-serif">Estate</text>
 
-        {/* Victoria Embankment */}
-        <rect x="140" y="410" width="160" height="28" rx="4" fill="#bdd8a8" stroke="#8eba76" strokeWidth="1" />
-        <text x="220" y="427" textAnchor="middle" fontSize="7.5" fill="#4a7a40" fontWeight="600" fontFamily="sans-serif">Victoria Embankment</text>
+        <rect x="140" y="410" width="160" height="28" rx="4" fill="#c8ddb0" stroke="#9ec87a" strokeWidth="1" />
+        <text x="220" y="427" textAnchor="middle" fontSize="7.5" fill="#3d6b35" fontWeight="600" fontFamily="sans-serif">Victoria Embankment</text>
 
-        {/* === CITY BLOCKS === */}
-        {/* City centre dense blocks */}
-        <rect x="155" y="150" width="60" height="48" fill="#d6d1c8" />
-        <rect x="220" y="150" width="45" height="48" fill="#ccc8bd" />
-        <rect x="270" y="150" width="60" height="48" fill="#d4cfc6" />
-        <rect x="155" y="203" width="35" height="42" fill="#c8c4bb" />
-        <rect x="195" y="203" width="70" height="42" fill="#d2cdc4" />
-        <rect x="270" y="203" width="60" height="42" fill="#d6cfc6" />
-        <rect x="155" y="250" width="45" height="45" fill="#d4cfc6" />
-        <rect x="205" y="250" width="60" height="45" fill="#ccc8bd" />
-        <rect x="270" y="250" width="60" height="45" fill="#d2cdc4" />
+        {/* City Blocks */}
+        {[
+          [155,150,60,48],[220,150,45,48],[270,150,60,48],
+          [155,203,35,42],[195,203,70,42],[270,203,60,42],
+          [155,250,45,45],[205,250,60,45],[270,250,60,45],
+          [335,115,95,50],[335,170,95,50],[335,225,95,45],[335,275,95,50],
+          [15,100,65,55],[85,100,65,55],[15,325,65,55],[85,325,65,55],[155,325,50,55],
+          [15,385,75,55],[95,385,40,55],[205,325,60,55],[270,325,60,55],[335,325,95,55],
+          [270,385,60,55],[335,385,95,55],
+        ].map(([x,y,w,h],i) => (
+          <rect key={i} x={x} y={y} width={w} height={h} fill={i%3===0?"#ddd8cf":i%3===1?"#d4cfc6":"#d8d3ca"} />
+        ))}
 
-        {/* Right/east blocks */}
-        <rect x="335" y="115" width="95" height="50" fill="#d8d3ca" />
-        <rect x="335" y="170" width="95" height="50" fill="#d4cfc6" />
-        <rect x="335" y="225" width="95" height="45" fill="#d8d3ca" />
-        <rect x="335" y="275" width="95" height="50" fill="#d4cfc6" />
+        {/* Ring road */}
+        <path d="M150,92 L290,92 Q390,92 390,130 L390,300 Q390,380 310,380 L130,380 Q50,380 50,300 L50,130 Q50,92 150,92 Z"
+          fill="none" stroke="#f5e0a0" strokeWidth="10" strokeLinejoin="round" />
+        <path d="M150,92 L290,92 Q390,92 390,130 L390,300 Q390,380 310,380 L130,380 Q50,380 50,300 L50,130 Q50,92 150,92 Z"
+          fill="none" stroke="#e8c860" strokeWidth="2.5" strokeDasharray="12,8" strokeLinejoin="round" />
 
-        {/* Left/west blocks */}
-        <rect x="15" y="100" width="65" height="55" fill="#d8d3ca" />
-        <rect x="85" y="100" width="65" height="55" fill="#d4cfc6" />
-        <rect x="15" y="325" width="65" height="55" fill="#d8d3ca" />
-        <rect x="85" y="325" width="65" height="55" fill="#d4cfc6" />
-        <rect x="155" y="325" width="50" height="55" fill="#d8d3ca" />
-
-        {/* Lower blocks */}
-        <rect x="15" y="385" width="75" height="55" fill="#d4cfc6" />
-        <rect x="95" y="385" width="40" height="55" fill="#d8d3ca" />
-        <rect x="205" y="325" width="60" height="55" fill="#d8d3ca" />
-        <rect x="270" y="325" width="60" height="55" fill="#d4cfc6" />
-        <rect x="335" y="325" width="95" height="55" fill="#d8d3ca" />
-        <rect x="270" y="385" width="60" height="55" fill="#d4cfc6" />
-        <rect x="335" y="385" width="95" height="55" fill="#d8d3ca" />
-
-        {/* === ROADS === */}
-        {/* Motorway/ring road - cream/yellow */}
-        <path
-          d="M150,92 L290,92 Q390,92 390,130 L390,300 Q390,380 310,380 L130,380 Q50,380 50,300 L50,130 Q50,92 150,92 Z"
-          fill="none" stroke="#f5e8c0" strokeWidth="9" strokeLinejoin="round" />
-        <path
-          d="M150,92 L290,92 Q390,92 390,130 L390,300 Q390,380 310,380 L130,380 Q50,380 50,300 L50,130 Q50,92 150,92 Z"
-          fill="none" stroke="#f0d898" strokeWidth="2" strokeLinejoin="round" strokeDasharray="0" />
-
-        {/* Major horizontal roads */}
-        <rect x="0" y="88" width="440" height="8" fill="white" />
-        <rect x="0" y="296" width="440" height="8" fill="white" />
-        <rect x="0" y="406" width="440" height="8" fill="white" />
-
-        {/* Major vertical roads */}
-        <rect x="148" y="0" width="8" height="520" fill="white" />
-        <rect x="216" y="0" width="8" height="520" fill="white" />
-        <rect x="328" y="0" width="8" height="520" fill="white" />
+        {/* Major roads */}
+        {[[0,88,440,8],[0,296,440,8],[0,406,440,8]].map(([x,y,w,h],i)=><rect key={`hr${i}`} x={x} y={y} width={w} height={h} fill="#ffffff"/>)}
+        {[[148,0,8,520],[216,0,8,520],[328,0,8,520]].map(([x,y,w,h],i)=><rect key={`vr${i}`} x={x} y={y} width={w} height={h} fill="#ffffff"/>)}
 
         {/* Medium roads */}
-        <rect x="0" y="148" width="440" height="5" fill="#fff8ee" />
-        <rect x="0" y="248" width="155" height="5" fill="#fff8ee" />
-        <rect x="335" y="248" width="105" height="5" fill="#fff8ee" />
-        <rect x="0" y="375" width="440" height="5" fill="#fff8ee" />
-        <rect x="78" y="92" width="5" height="315" fill="#fff8ee" />
-        <rect x="265" y="0" width="5" height="450" fill="#fff8ee" />
+        <rect x="0" y="148" width="440" height="5" fill="#fffbf0" />
+        <rect x="0" y="248" width="155" height="5" fill="#fffbf0" />
+        <rect x="335" y="248" width="105" height="5" fill="#fffbf0" />
+        <rect x="0" y="375" width="440" height="5" fill="#fffbf0" />
+        <rect x="78" y="92" width="5" height="315" fill="#fffbf0" />
+        <rect x="265" y="0" width="5" height="450" fill="#fffbf0" />
 
-        {/* Derby Road diagonal */}
+        {/* Diagonal roads */}
         <path d="M155,248 L90,140 L45,50" stroke="white" strokeWidth="5" fill="none" strokeLinejoin="round" />
-        {/* Mansfield Road diagonal */}
         <path d="M265,188 L310,100 L360,28" stroke="white" strokeWidth="4.5" fill="none" strokeLinejoin="round" />
-        {/* Trent Bridge */}
-        <path d="M180,406 L260,406" stroke="#ccc" strokeWidth="3" fill="none" />
+        <path d="M180,406 L260,406" stroke="#e0e0e0" strokeWidth="3" fill="none" />
 
         {/* Minor streets */}
-        {[120,180,205,340,390].map(y => (
-          <line key={y} x1="0" y1={y} x2="440" y2={y} stroke="white" strokeWidth="2" opacity="0.7" />
-        ))}
-        {[100,175,390,420].map(x => (
-          <line key={x} x1={x} y1="92" x2={x} y2="406" stroke="white" strokeWidth="2" opacity="0.7" />
-        ))}
+        {[120,180,205,340,390].map(y => <line key={y} x1="0" y1={y} x2="440" y2={y} stroke="white" strokeWidth="2.5" opacity="0.8" />)}
+        {[100,175,390,420].map(x => <line key={x} x1={x} y1="92" x2={x} y2="406" stroke="white" strokeWidth="2.5" opacity="0.8" />)}
 
-        {/* === HIGHWAY BADGES === */}
-        {[
-          { x: 30, y: 300, label: "A52" },
-          { x: 410, y: 300, label: "A52" },
-          { x: 30, y: 96, label: "A610" },
-        ].map(b => (
-          <g key={b.label + b.x}>
-            <circle cx={b.x} cy={b.y} r={13} fill="white" stroke="#bbb" strokeWidth="1" />
-            <text x={b.x} y={b.y + 4} textAnchor="middle" fontSize="7.5" fontWeight="800" fill="#444" fontFamily="sans-serif">{b.label}</text>
+        {/* Road badges */}
+        {[{x:30,y:300,l:"A52"},{x:410,y:300,l:"A52"},{x:30,y:96,l:"A610"}].map(b=>(
+          <g key={b.l+b.x}>
+            <circle cx={b.x} cy={b.y} r={14} fill="white" stroke="#ccc" strokeWidth="1.5" />
+            <text x={b.x} y={b.y+4} textAnchor="middle" fontSize="7.5" fontWeight="800" fill="#555" fontFamily="sans-serif">{b.l}</text>
           </g>
         ))}
 
-        {/* === AREA LABELS === */}
+        {/* Area labels */}
         {[
-          { x: 220, y: 230, t: "City Centre", size: 9, bold: true },
-          { x: 370, y: 200, t: "Sneinton", size: 8, bold: false },
-          { x: 45, y: 162, t: "Radford", size: 7.5, bold: false },
-          { x: 370, y: 355, t: "Carlton", size: 7.5, bold: false },
-          { x: 220, y: 455, t: "The Meadows", size: 8, bold: false },
-          { x: 30, y: 370, t: "Lenton", size: 7.5, bold: false },
-          { x: 190, y: 360, t: "Castlegate", size: 7.5, bold: false },
-        ].map(l => (
-          <text key={l.t} x={l.x} y={l.y} textAnchor="middle" fontSize={l.size}
-                fill="#666" fontWeight={l.bold ? "700" : "500"} fontFamily="sans-serif"
-                style={{ pointerEvents: "none" }}>{l.t}</text>
+          {x:220,y:226,t:"City Centre",s:9,b:true},
+          {x:372,y:198,t:"Sneinton",s:8,b:false},
+          {x:44,y:162,t:"Radford",s:7.5,b:false},
+          {x:372,y:355,t:"Carlton",s:7.5,b:false},
+          {x:220,y:460,t:"The Meadows",s:8,b:false},
+          {x:30,y:370,t:"Lenton",s:7.5,b:false},
+          {x:190,y:358,t:"Castlegate",s:7.5,b:false},
+        ].map(l=>(
+          <text key={l.t} x={l.x} y={l.y} textAnchor="middle" fontSize={l.s}
+                fill="#666" fontWeight={l.b?"700":"500"} fontFamily="sans-serif"
+                style={{pointerEvents:"none"}}>{l.t}</text>
         ))}
 
-        {/* === BUSY ZONE OVERLAYS === */}
-        {busyZones.map(z => (
+        {/* Busy zones */}
+        {busyZones.map(z=>(
           <g key={z.id}>
-            <circle cx={z.x} cy={z.y} r={z.r} fill={`rgba(${z.multiplier > 1.3 ? "210,60,30" : z.multiplier > 1.2 ? "220,100,20" : "220,140,10"},0.22)`} />
-            <circle cx={z.x} cy={z.y} r={z.r * 0.6} fill={`rgba(${z.multiplier > 1.3 ? "200,40,10" : z.multiplier > 1.2 ? "210,80,10" : "210,120,5"},0.15)`} />
+            <circle cx={z.x} cy={z.y} r={z.r} fill={`rgba(${z.multiplier>1.3?"220,60,20":z.multiplier>1.2?"230,100,10":"230,150,0"},0.18)`}/>
+            <circle cx={z.x} cy={z.y} r={z.r*0.55} fill={`rgba(${z.multiplier>1.3?"210,40,5":z.multiplier>1.2?"220,80,5":"220,120,0"},0.12)`}/>
           </g>
         ))}
 
-        {/* === ORDER BUBBLES ON MAP === */}
-        {orders.map(o => (
-          <g key={o.id} onClick={() => onOrderTap(o)} style={{ cursor: "pointer" }}>
-            <circle cx={o.mapX} cy={o.mapY} r={20} fill="white" stroke="#ddd" strokeWidth="1.5"
-                    style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.2))" }} />
-            <text x={o.mapX} y={o.mapY - 3} textAnchor="middle" fontSize="8" fontWeight="800" fill="#222" fontFamily="sans-serif">
+        {/* Order bubbles */}
+        {orders.map(o=>(
+          <g key={o.id} onClick={()=>onOrderTap(o)} style={{cursor:"pointer"}}>
+            <circle cx={o.mapX} cy={o.mapY} r={22} fill="white"
+                    style={{filter:"drop-shadow(0 3px 8px rgba(0,0,0,0.25))"}}/>
+            <text x={o.mapX} y={o.mapY-2} textAnchor="middle" fontSize="8.5" fontWeight="900" fill="#111" fontFamily="sans-serif">
               {fmt(o.total)}
             </text>
-            <text x={o.mapX} y={o.mapY + 8} textAnchor="middle" fontSize="7" fill="#888" fontFamily="sans-serif">
-              {o.restaurant.emoji}
-            </text>
-            {/* Pulsing ring */}
-            <circle cx={o.mapX} cy={o.mapY} r={24} fill="none" stroke="#06C167" strokeWidth="2" opacity="0.5"
-                    style={{ animation: "mapPulse 1.8s ease-out infinite" }} />
+            <text x={o.mapX} y={o.mapY+10} textAnchor="middle" fontSize="9">{o.restaurant.emoji}</text>
+            <circle cx={o.mapX} cy={o.mapY} r={26} fill="none" stroke="#06C167" strokeWidth="2.5" opacity="0.55"
+                    style={{animation:"mapPulse 1.8s ease-out infinite"}}/>
           </g>
         ))}
 
-        {/* === DRIVER LOCATION MARKER === */}
+        {/* Driver marker */}
         {driverPhase !== "offline" && (
           <g>
-            <circle cx={220} cy={280} r={24} fill="rgba(6,193,103,0.18)" />
-            <circle cx={220} cy={280} r={14} fill="#06C167" stroke="white" strokeWidth="3"
-                    style={{ filter: "drop-shadow(0 2px 8px rgba(6,193,103,0.6))" }} />
-            <circle cx={220} cy={280} r={5} fill="white" />
+            <circle cx={220} cy={280} r={28} fill="rgba(6,193,103,0.15)"/>
+            <circle cx={220} cy={280} r={16} fill="#06C167" stroke="white" strokeWidth="3.5"
+                    style={{filter:"drop-shadow(0 3px 10px rgba(6,193,103,0.7))"}}/>
+            <circle cx={220} cy={280} r={5.5} fill="white"/>
           </g>
         )}
 
-        {/* === SURGE MULTIPLIER BADGE === */}
-        {busyZones.length > 0 && driverPhase !== "offline" && (
+        {/* Surge badge on map */}
+        {busyZones.length>0 && driverPhase!=="offline" && (
           <g>
-            <rect x="340" y="400" width="70" height="26" rx="13" fill="#06C167" />
-            <text x="375" y="415" textAnchor="middle" fontSize="11" fontWeight="900" fill="white" fontFamily="sans-serif">
-              {Math.max(...busyZones.map(z => z.multiplier)).toFixed(1)}x
+            <rect x="344" y="396" width="76" height="28" rx="14" fill="#06C167"/>
+            <text x="382" y="414" textAnchor="middle" fontSize="12" fontWeight="900" fill="white" fontFamily="sans-serif">
+              {Math.max(...busyZones.map(z=>z.multiplier)).toFixed(1)}× surge
             </text>
           </g>
         )}
@@ -343,173 +293,194 @@ function SideMenu({ isOpen, profile, earnings, tripCount, onClose, onUpdateProfi
   }
 
   const menuItems = [
-    { icon: "📬", label: "Inbox",          badge: "3", action: () => {} },
-    { icon: "👥", label: "Refer Friends",  badge: null, action: () => {} },
-    { icon: "⚡", label: "Opportunities",  badge: "•", action: () => {} },
-    { icon: "📊", label: "Earnings",       badge: null, action: () => setPage("earnings") },
-    { icon: rank.icon, label: "Uber Pro",  badge: null, action: () => setPage("rank") },
-    { icon: "💰", label: "Wallet",         badge: null, action: () => setPage("wallet") },
-    { icon: "👤", label: "Account",        badge: null, action: () => setPage("account") },
+    { icon: "📬", label: "Inbox",         badge: "3",  action: () => {} },
+    { icon: "👥", label: "Refer Friends", badge: null, action: () => {} },
+    { icon: "⚡", label: "Opportunities", badge: "•",  action: () => {} },
+    { icon: "📊", label: "Earnings",      badge: null, action: () => setPage("earnings") },
+    { icon: rank.icon, label: "Uber Pro", badge: null, action: () => setPage("rank") },
+    { icon: "💰", label: "Wallet",        badge: null, action: () => setPage("wallet") },
+    { icon: "👤", label: "Account",       badge: null, action: () => setPage("account") },
   ];
 
   return (
     <>
-      {/* Backdrop */}
       {isOpen && (
-        <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 190, animation: "fadeIn 0.2s ease" }} />
+        <div onClick={onClose} style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+          zIndex: 190, animation: "fadeIn 0.2s ease",
+        }} />
       )}
-
-      {/* Menu panel */}
       <div style={{
-        position: "fixed", top: 0, left: 0, bottom: 0, width: 285,
-        background: "white", zIndex: 200, display: "flex", flexDirection: "column",
+        position: "fixed", top: 0, left: 0, bottom: 0, width: 290,
+        background: "#fff", zIndex: 200, display: "flex", flexDirection: "column",
         transform: isOpen ? "translateX(0)" : "translateX(-100%)",
         transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
-        boxShadow: isOpen ? "4px 0 24px rgba(0,0,0,0.2)" : "none",
+        boxShadow: isOpen ? "6px 0 30px rgba(0,0,0,0.18)" : "none",
       }}>
-
-        {/* Profile header */}
-        <div style={{ background: "#1a1a1a", paddingTop: 56, paddingBottom: 20, paddingLeft: 20, paddingRight: 20 }}>
+        {/* Header */}
+        <div style={{ background: "#000", paddingTop: 54, paddingBottom: 22, paddingLeft: 20, paddingRight: 20 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#06C16722", border: "2px solid #06C167", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 30 }}>
+            <div style={{ width: 62, height: 62, borderRadius: "50%", background: "#06C16718", border: "2.5px solid #06C167", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32 }}>
               {profile.avatar}
             </div>
             <div>
-              <div style={{ color: "white", fontWeight: 800, fontSize: 18 }}>{profile.name.split(" ")[0]}</div>
-              <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, fontFamily: "monospace" }}>{profile.driverCode}</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 4 }}>
-                <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#06C167" }} />
-                <span style={{ color: "#06C167", fontSize: 11, fontWeight: 700 }}>⭐ 4.93</span>
+              <div style={{ color: "white", fontWeight: 800, fontSize: 18, letterSpacing: "-0.3px" }}>{profile.name.split(" ")[0]}</div>
+              <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, fontFamily: "monospace", marginTop: 2 }}>{profile.driverCode}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 5 }}>
+                <span style={{ color: "#FFD700", fontSize: 12 }}>★</span>
+                <span style={{ color: "#fff", fontSize: 12, fontWeight: 700 }}>4.93</span>
+                <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 11 }}>· {tripCount} trips</span>
               </div>
             </div>
           </div>
+          {/* Rank bar */}
+          <div style={{ marginTop: 16, background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: "10px 12px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+              <span style={{ color: "#fff", fontWeight: 700, fontSize: 12 }}>{rank.icon} Uber Pro {rank.name}</span>
+              {nextRank && <span style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>{nextRank.name} →</span>}
+            </div>
+            <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: 3, height: 4, overflow: "hidden" }}>
+              <div style={{ height: "100%", background: "#06C167", borderRadius: 3, width: `${pct}%`, transition: "width 0.5s ease" }} />
+            </div>
+            {nextRank && (
+              <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 10, marginTop: 5 }}>
+                {(nextRank.min - tripCount)} more trips to {nextRank.name}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Page content or menu list */}
         <div style={{ flex: 1, overflowY: "auto" }}>
           {!page && (
             <>
-              <div style={{ padding: "8px 0" }}>
+              <div style={{ padding: "6px 0" }}>
                 {menuItems.map(item => (
                   <button key={item.label} onClick={item.action} style={{
                     width: "100%", background: "none", border: "none", textAlign: "left",
                     padding: "15px 22px", display: "flex", alignItems: "center", gap: 16,
-                    cursor: "pointer", borderBottom: "1px solid #f0f0f0",
+                    cursor: "pointer", borderBottom: "1px solid #f5f5f5",
                   }}>
                     <span style={{ fontSize: 18, width: 24, textAlign: "center" }}>{item.icon}</span>
-                    <span style={{ flex: 1, fontSize: 16, fontWeight: 500, color: "#1a1a1a" }}>{item.label}</span>
+                    <span style={{ flex: 1, fontSize: 15, fontWeight: 500, color: "#1a1a1a" }}>{item.label}</span>
                     {item.badge && (
-                      <span style={{ background: item.badge === "•" ? "#06C167" : "#276EF1", color: "white", borderRadius: 12, padding: "1px 7px", fontSize: 11, fontWeight: 700 }}>
+                      <span style={{ background: item.badge === "•" ? "#06C167" : "#276EF1", color: "white", borderRadius: 12, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>
                         {item.badge}
                       </span>
                     )}
-                    <span style={{ color: "#bbb", fontSize: 14 }}>›</span>
+                    <span style={{ color: "#ccc", fontSize: 16 }}>›</span>
                   </button>
                 ))}
               </div>
-              <div style={{ padding: "16px 22px", borderTop: "1px solid #f0f0f0", marginTop: 8 }}>
-                <div style={{ color: "#888", fontSize: 13, fontWeight: 600, marginBottom: 12 }}>Help</div>
-                <div style={{ color: "#444", fontSize: 14, marginBottom: 10 }}>Learning Center</div>
-                <div style={{ color: "#444", fontSize: 14 }}>Support</div>
+              <div style={{ padding: "16px 22px", borderTop: "1px solid #f0f0f0", marginTop: 4 }}>
+                <div style={{ color: "#aaa", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>Help</div>
+                <div style={{ color: "#444", fontSize: 14, marginBottom: 10, cursor: "pointer" }}>Learning Center</div>
+                <div style={{ color: "#444", fontSize: 14, cursor: "pointer" }}>Support</div>
               </div>
             </>
           )}
 
-          {/* Earnings page */}
           {page === "earnings" && (
             <div style={{ padding: "20px" }}>
-              <button onClick={() => setPage(null)} style={{ background: "none", border: "none", color: "#666", fontSize: 14, cursor: "pointer", marginBottom: 16, padding: 0 }}>← Back</button>
+              <button onClick={() => setPage(null)} style={{ background: "none", border: "none", color: "#666", fontSize: 14, cursor: "pointer", marginBottom: 16, padding: 0, display: "flex", alignItems: "center", gap: 6 }}>← Back</button>
               <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 20 }}>Earnings</div>
-              <div style={{ background: "#f8f8f8", borderRadius: 14, padding: "20px", marginBottom: 16, textAlign: "center" }}>
-                <div style={{ color: "#888", fontSize: 12, marginBottom: 4 }}>Total Earned</div>
-                <div style={{ color: "#1a1a1a", fontWeight: 900, fontSize: 36 }}>{fmt(earnings)}</div>
+              <div style={{ background: "#f8f8f8", borderRadius: 16, padding: "20px", marginBottom: 14, textAlign: "center" }}>
+                <div style={{ color: "#888", fontSize: 12, marginBottom: 4, fontWeight: 600 }}>Total Earned</div>
+                <div style={{ color: "#06C167", fontWeight: 900, fontSize: 36 }}>{fmt(earnings)}</div>
+                <div style={{ color: "#bbb", fontSize: 12, marginTop: 4 }}>{tripCount} deliveries</div>
               </div>
-              <div style={{ background: "#f8f8f8", borderRadius: 14, padding: "16px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                  <span style={{ color: "#888", fontSize: 13 }}>Total Deliveries</span>
-                  <span style={{ fontWeight: 700, fontSize: 13 }}>{tripCount}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-                  <span style={{ color: "#888", fontSize: 13 }}>Avg per Trip</span>
-                  <span style={{ fontWeight: 700, fontSize: 13 }}>{tripCount > 0 ? fmt(earnings / tripCount) : "£0.00"}</span>
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ color: "#888", fontSize: 13 }}>Completion Rate</span>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: "#06C167" }}>100%</span>
-                </div>
+              <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+                {[["Today", fmt(earnings)], ["This Week", fmt(earnings * 4.2)], ["Avg/hr", fmt(earnings > 0 ? earnings / Math.max(1, tripCount) * 3.5 : 0)]].map(([l, v]) => (
+                  <div key={l} style={{ flex: 1, background: "#f8f8f8", borderRadius: 12, padding: "12px 8px", textAlign: "center" }}>
+                    <div style={{ fontWeight: 700, fontSize: 14 }}>{v}</div>
+                    <div style={{ color: "#aaa", fontSize: 10, marginTop: 2 }}>{l}</div>
+                  </div>
+                ))}
               </div>
+              <button onClick={() => { onCashOut(); setPage(null); }} disabled={earnings <= 0} style={{
+                width: "100%", background: earnings > 0 ? "#06C167" : "#f0f0f0",
+                border: "none", borderRadius: 100, color: earnings > 0 ? "#fff" : "#bbb",
+                fontWeight: 800, fontSize: 16, padding: "16px", cursor: earnings > 0 ? "pointer" : "default",
+              }}>
+                Cash Out {earnings > 0 ? fmt(earnings) : ""}
+              </button>
             </div>
           )}
 
-          {/* Wallet page */}
+          {page === "rank" && (
+            <div style={{ padding: "20px" }}>
+              <button onClick={() => setPage(null)} style={{ background: "none", border: "none", color: "#666", fontSize: 14, cursor: "pointer", marginBottom: 16, padding: 0 }}>← Back</button>
+              <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 20 }}>Uber Pro Status</div>
+              {RANKS.map(r => {
+                const active = r.name === rank.name;
+                const completed = tripCount >= (r.max ?? Infinity) || active;
+                return (
+                  <div key={r.name} style={{
+                    background: active ? r.gradient : "#f8f8f8", borderRadius: 14, padding: "14px 16px",
+                    marginBottom: 10, border: active ? "none" : "1px solid #eee", opacity: completed || active ? 1 : 0.5,
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 22 }}>{r.icon}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 15, color: active ? "#fff" : "#1a1a1a" }}>{r.name}</div>
+                        <div style={{ fontSize: 11, color: active ? "rgba(255,255,255,0.6)" : "#aaa", marginTop: 2 }}>{r.min}–{r.max ?? "∞"} trips</div>
+                      </div>
+                      {active && <span style={{ color: "#fff", fontWeight: 700, fontSize: 12, background: "rgba(255,255,255,0.2)", borderRadius: 20, padding: "3px 10px" }}>Current</span>}
+                    </div>
+                    {active && (
+                      <div style={{ marginTop: 10 }}>
+                        {r.perks.map(p => <div key={p} style={{ color: "rgba(255,255,255,0.8)", fontSize: 12, marginTop: 4 }}>✓ {p}</div>)}
+                        {nextRank && (
+                          <div style={{ marginTop: 10 }}>
+                            <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 11, marginBottom: 5 }}>
+                              {nextRank.min - tripCount} trips to {nextRank.name}
+                            </div>
+                            <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: 3, height: 4 }}>
+                              <div style={{ height: "100%", background: "white", borderRadius: 3, width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {page === "wallet" && (
             <div style={{ padding: "20px" }}>
               <button onClick={() => setPage(null)} style={{ background: "none", border: "none", color: "#666", fontSize: 14, cursor: "pointer", marginBottom: 16, padding: 0 }}>← Back</button>
               <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 20 }}>Wallet</div>
-              <div style={{ background: "#f8f8f8", borderRadius: 14, padding: "20px", marginBottom: 16, textAlign: "center" }}>
-                <div style={{ color: "#888", fontSize: 12, marginBottom: 4 }}>Available Balance</div>
-                <div style={{ color: "#1a1a1a", fontWeight: 900, fontSize: 36 }}>{fmt(earnings)}</div>
+              <div style={{ background: "linear-gradient(135deg,#000,#1a1a1a)", borderRadius: 18, padding: "24px", marginBottom: 16, textAlign: "center" }}>
+                <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, marginBottom: 8 }}>Available Balance</div>
+                <div style={{ color: "#06C167", fontWeight: 900, fontSize: 38 }}>{fmt(earnings)}</div>
+                <button onClick={() => { onCashOut(); setPage(null); }} disabled={earnings <= 0} style={{
+                  marginTop: 16, background: earnings > 0 ? "#06C167" : "#333",
+                  border: "none", borderRadius: 100, color: "#fff", fontWeight: 700,
+                  fontSize: 14, padding: "12px 28px", cursor: earnings > 0 ? "pointer" : "default",
+                }}>Cash Out Instantly</button>
               </div>
-              <button
-                onClick={() => { onCashOut(); setPage(null); onClose(); }}
-                disabled={earnings <= 0}
-                style={{
-                  width: "100%", background: earnings > 0 ? "#06C167" : "#ddd",
-                  border: "none", borderRadius: 12, color: "white", fontWeight: 800,
-                  fontSize: 16, padding: "16px", cursor: earnings > 0 ? "pointer" : "default",
-                }}
-              >💳 Cash Out</button>
-              {earnings <= 0 && <div style={{ color: "#bbb", fontSize: 12, textAlign: "center", marginTop: 8 }}>No earnings to cash out yet</div>}
-            </div>
-          )}
-
-          {/* Rank / Uber Pro page */}
-          {page === "rank" && (
-            <div style={{ padding: "20px" }}>
-              <button onClick={() => setPage(null)} style={{ background: "none", border: "none", color: "#666", fontSize: 14, cursor: "pointer", marginBottom: 16, padding: 0 }}>← Back</button>
-              <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 20 }}>Uber Pro</div>
-              <div style={{ background: rank.gradient, borderRadius: 16, padding: "20px", marginBottom: 16, textAlign: "center" }}>
-                <div style={{ fontSize: 40, marginBottom: 8 }}>{rank.icon}</div>
-                <div style={{ color: "white", fontWeight: 900, fontSize: 24 }}>{rank.name}</div>
-                <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 4 }}>{tripCount} trips completed</div>
-              </div>
-              {nextRank && (
-                <div style={{ background: "#f8f8f8", borderRadius: 14, padding: "16px", marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>Progress to {nextRank.icon} {nextRank.name}</div>
-                  <div style={{ background: "#e0e0e0", borderRadius: 4, height: 8, overflow: "hidden" }}>
-                    <div style={{ height: "100%", background: rank.gradient, width: `${pct}%`, borderRadius: 4, transition: "width 0.5s" }} />
-                  </div>
-                  <div style={{ fontSize: 12, color: "#888", marginTop: 6, textAlign: "right" }}>{nextRank.min - tripCount} trips to go</div>
-                </div>
-              )}
-              <div style={{ background: "#f8f8f8", borderRadius: 14, padding: "14px" }}>
-                {rank.perks.map((p, i) => (
-                  <div key={i} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 0", borderBottom: i < rank.perks.length - 1 ? "1px solid #ebebeb" : "none" }}>
-                    <span style={{ color: "#06C167", fontSize: 14 }}>✓</span>
-                    <span style={{ fontSize: 13, color: "#444" }}>{p}</span>
-                  </div>
-                ))}
+              <div style={{ color: "#aaa", fontSize: 13 }}>
+                Earnings are typically transferred within minutes via Instant Pay.
               </div>
             </div>
           )}
 
-          {/* Account / Edit profile page */}
           {page === "account" && (
             <div style={{ padding: "20px" }}>
               <button onClick={() => setPage(null)} style={{ background: "none", border: "none", color: "#666", fontSize: 14, cursor: "pointer", marginBottom: 16, padding: 0 }}>← Back</button>
-              <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 4 }}>Account</div>
-              <div style={{ color: "#999", fontSize: 12, fontFamily: "monospace", marginBottom: 20 }}>{profile.driverCode}</div>
+              <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 6 }}>Account</div>
+              <div style={{ color: "#aaa", fontSize: 12, fontFamily: "monospace", marginBottom: 20 }}>{profile.driverCode}</div>
 
               <label style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.4px", display: "block", marginBottom: 6 }}>Display Name</label>
-              <input value={editName} onChange={e => setEditName(e.target.value)}
-                style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #e0e0e0", borderRadius: 10, padding: "12px", fontSize: 15, marginBottom: 16, outline: "none" }} />
+              <input value={editName} onChange={e => setEditName(e.target.value)} style={{ width: "100%", boxSizing: "border-box", border: "1.5px solid #e8e8e8", borderRadius: 10, padding: "13px", fontSize: 15, marginBottom: 16, outline: "none" }} />
 
               <label style={{ fontSize: 11, fontWeight: 700, color: "#888", textTransform: "uppercase", letterSpacing: "0.4px", display: "block", marginBottom: 8 }}>Avatar</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
                 {AVATARS.map(a => (
                   <button key={a} onClick={() => setEditAvatar(a)} style={{
-                    width: 40, height: 40, borderRadius: 10, border: editAvatar === a ? "2px solid #06C167" : "2px solid #e0e0e0",
-                    background: editAvatar === a ? "#06C16712" : "white", fontSize: 20, cursor: "pointer",
+                    width: 42, height: 42, borderRadius: 10, border: editAvatar === a ? "2px solid #06C167" : "2px solid #e8e8e8",
+                    background: editAvatar === a ? "#06C16710" : "white", fontSize: 20, cursor: "pointer",
                   }}>{a}</button>
                 ))}
               </div>
@@ -518,8 +489,8 @@ function SideMenu({ isOpen, profile, earnings, tripCount, onClose, onUpdateProfi
               <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                 {VEHICLES.map(v => (
                   <button key={v.emoji} onClick={() => setEditVehicle(v.emoji)} style={{
-                    flex: 1, padding: "10px 4px", borderRadius: 10, border: editVehicle === v.emoji ? "2px solid #06C167" : "2px solid #e0e0e0",
-                    background: editVehicle === v.emoji ? "#06C16712" : "white", fontSize: 18, cursor: "pointer",
+                    flex: 1, padding: "10px 4px", borderRadius: 10, border: editVehicle === v.emoji ? "2px solid #06C167" : "2px solid #e8e8e8",
+                    background: editVehicle === v.emoji ? "#06C16710" : "white", fontSize: 18, cursor: "pointer",
                   }}>{v.emoji}</button>
                 ))}
               </div>
@@ -528,14 +499,14 @@ function SideMenu({ isOpen, profile, earnings, tripCount, onClose, onUpdateProfi
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
                 {CITIES.map(c => (
                   <button key={c} onClick={() => setEditCity(c)} style={{
-                    padding: "12px 14px", borderRadius: 10, border: editCity === c ? "2px solid #06C167" : "2px solid #e0e0e0",
-                    background: editCity === c ? "#06C16712" : "white", textAlign: "left",
+                    padding: "12px 14px", borderRadius: 10, border: editCity === c ? "2px solid #06C167" : "2px solid #e8e8e8",
+                    background: editCity === c ? "#06C16710" : "white", textAlign: "left",
                     fontSize: 14, fontWeight: editCity === c ? 700 : 400, color: "#1a1a1a", cursor: "pointer",
                   }}>{c}</button>
                 ))}
               </div>
 
-              <button onClick={saveProfile} style={{ width: "100%", background: "#06C167", border: "none", borderRadius: 12, color: "white", fontWeight: 800, fontSize: 16, padding: "15px", cursor: "pointer" }}>
+              <button onClick={saveProfile} style={{ width: "100%", background: "#06C167", border: "none", borderRadius: 100, color: "white", fontWeight: 800, fontSize: 15, padding: "16px", cursor: "pointer" }}>
                 {saveMsg || "Save Changes"}
               </button>
             </div>
@@ -543,6 +514,29 @@ function SideMenu({ isOpen, profile, earnings, tripCount, onClose, onUpdateProfi
         </div>
       </div>
     </>
+  );
+}
+
+// ─── Order Request Timer ───────────────────────────────────────────────────────
+
+function CountdownRing({ seconds, total }: { seconds: number; total: number }) {
+  const r = 26;
+  const circ = 2 * Math.PI * r;
+  const pct = seconds / total;
+  const offset = circ * (1 - pct);
+  const color = seconds > total * 0.4 ? "#06C167" : seconds > total * 0.2 ? "#FF9500" : "#FF3B30";
+  return (
+    <div style={{ position: "relative", width: 64, height: 64, flexShrink: 0 }}>
+      <svg width="64" height="64" style={{ transform: "rotate(-90deg)" }}>
+        <circle cx="32" cy="32" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4.5"/>
+        <circle cx="32" cy="32" r={r} fill="none" stroke={color} strokeWidth="4.5"
+                strokeDasharray={circ} strokeDashoffset={offset}
+                strokeLinecap="round" style={{ transition: "stroke-dashoffset 1s linear, stroke 0.3s ease" }}/>
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ color, fontWeight: 900, fontSize: 18, letterSpacing: "-0.5px" }}>{seconds}</span>
+      </div>
+    </div>
   );
 }
 
@@ -558,56 +552,62 @@ function RoadView({ phase, order, progress, vehicleEmoji }: { phase: Phase; orde
 
   return (
     <div style={{ position: "relative", flex: 1, background: "#111", overflow: "hidden", minHeight: 0 }}>
-      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom,#0a0a1a 0%,#111827 40%,#1a1a1a 100%)" }} />
+      <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to bottom,#050510 0%,#0d1020 40%,#141420 100%)" }} />
       <Skyline />
-      <div style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "44%", top: "28%", background: "#1c1c1c" }}>
-        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 4, background: "#FFD700", opacity: 0.6 }} />
-        <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 4, background: "#FFD700", opacity: 0.6 }} />
+      {/* Road surface */}
+      <div style={{ position: "absolute", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "46%", top: "30%" }}>
+        <div style={{ position: "absolute", inset: 0, background: "#1a1a1e" }} />
+        <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 5, background: "#FFD700", opacity: 0.55 }} />
+        <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 5, background: "#FFD700", opacity: 0.55 }} />
         <div style={{
-          position: "absolute", left: "50%", top: 0, bottom: 0, width: 4,
-          transform: "translateX(-50%)",
+          position: "absolute", left: "50%", top: 0, bottom: 0, width: 3, transform: "translateX(-50%)",
           backgroundImage: "repeating-linear-gradient(to bottom, #fff 0px, #fff 28px, transparent 28px, transparent 56px)",
-          backgroundSize: "4px 56px",
+          backgroundSize: "3px 56px",
           animation: moving ? "roadScroll 1.4s linear infinite" : "none",
-          opacity: 0.35,
+          opacity: 0.3,
         }} />
         {(moving || atRest) && (
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: `${100 - progress}%`, background: `linear-gradient(to top, ${destColor}18, transparent)`, transition: "height 0.3s ease" }} />
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: `${100 - progress}%`, background: `linear-gradient(to top, ${destColor}20, transparent)`, transition: "height 0.3s ease" }} />
         )}
       </div>
-      {["-28%", "72%"].map((left, i) => (
-        <div key={i} style={{ position: "absolute", top: "28%", bottom: 0, left, width: "6%", background: "#161616" }}>
-          <div style={{ position: "absolute", inset: 0, backgroundImage: "repeating-linear-gradient(to bottom, #2a2a2a 0px, #2a2a2a 20px, transparent 20px, transparent 40px)", animation: moving ? "roadScroll 1.4s linear infinite" : "none", opacity: 0.5 }} />
+      {/* Sidewalks */}
+      {["-30%", "76%"].map((left, i) => (
+        <div key={i} style={{ position: "absolute", top: "30%", bottom: 0, left, width: "7%" }}>
+          <div style={{ position: "absolute", inset: 0, background: "#141418", backgroundImage: "repeating-linear-gradient(to bottom, #1e1e24 0px, #1e1e24 20px, transparent 20px, transparent 40px)", animation: moving ? "roadScroll 1.4s linear infinite" : "none", opacity: 0.7 }} />
         </div>
       ))}
+      {/* Destination indicator */}
       {order && (phase === "to-restaurant" || phase === "at-restaurant" || phase === "to-customer") && (
-        <div style={{ position: "absolute", top: "6%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, animation: "fadeIn 0.5s ease", zIndex: 10 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 14, background: destColor + "22", border: `2px solid ${destColor}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, boxShadow: `0 0 20px ${destColor}66`, animation: atRest ? "glow 1.5s ease-in-out infinite alternate" : "none" }}>{destEmoji}</div>
-          <div style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", border: `1px solid ${destColor}44`, borderRadius: 8, padding: "4px 12px", color: "#fff", fontSize: 12, fontWeight: 600 }}>{destLabel}</div>
+        <div style={{ position: "absolute", top: "7%", left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center", gap: 8, animation: "fadeIn 0.5s ease", zIndex: 10 }}>
+          <div style={{ width: 60, height: 60, borderRadius: 16, background: destColor + "22", border: `2px solid ${destColor}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, boxShadow: `0 0 24px ${destColor}55`, animation: atRest ? "glow 1.5s ease-in-out infinite alternate" : "none" }}>{destEmoji}</div>
+          <div style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)", border: `1px solid ${destColor}55`, borderRadius: 10, padding: "5px 14px", color: "#fff", fontSize: 12, fontWeight: 600 }}>{destLabel}</div>
         </div>
       )}
+      {/* Progress bar */}
       {moving && (
-        <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: "38%" }}>
-          <div style={{ background: "rgba(255,255,255,0.08)", borderRadius: 4, height: 4, overflow: "hidden" }}>
+        <div style={{ position: "absolute", top: "52%", left: "50%", transform: "translateX(-50%)", width: "42%" }}>
+          <div style={{ background: "rgba(255,255,255,0.07)", borderRadius: 4, height: 4, overflow: "hidden" }}>
             <div style={{ height: "100%", borderRadius: 4, background: destColor, width: `${progress}%`, transition: "width 0.3s ease" }} />
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-            <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 10 }}>Start</span>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
+            <span style={{ color: "rgba(255,255,255,0.25)", fontSize: 10 }}>Start</span>
             <span style={{ color: destColor, fontSize: 10, fontWeight: 700 }}>{Math.round(progress)}%</span>
-            <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 10 }}>Dest.</span>
+            <span style={{ color: "rgba(255,255,255,0.25)", fontSize: 10 }}>Dest</span>
           </div>
         </div>
       )}
+      {/* Vehicle */}
       <div style={{
         position: "absolute",
-        bottom: atRest ? "68%" : (moving ? `${20 + progress * 0.52}%` : "22%"),
+        bottom: atRest ? "70%" : (moving ? `${20 + progress * 0.52}%` : "22%"),
         left: "50%", transform: "translateX(-50%)",
         transition: "bottom 0.3s ease", zIndex: 20,
-        filter: "drop-shadow(0 4px 12px rgba(0,0,0,0.8))",
-        animation: moving ? "carBounce 0.3s ease-in-out infinite alternate" : "none",
-        fontSize: 36, lineHeight: 1,
+        filter: "drop-shadow(0 6px 16px rgba(0,0,0,0.9))",
+        animation: moving ? "carBounce 0.35s ease-in-out infinite alternate" : "none",
+        fontSize: 38, lineHeight: 1,
       }}>{vehicleEmoji}</div>
-      {moving && <div style={{ position: "absolute", bottom: `${20 + progress * 0.52 + 5}%`, left: "50%", transform: "translateX(-50%)", width: 60, height: 80, background: "linear-gradient(to top, rgba(255,240,150,0.15), transparent)", clipPath: "polygon(20% 100%, 80% 100%, 100% 0%, 0% 0%)", zIndex: 15 }} />}
+      {/* Headlights */}
+      {moving && <div style={{ position: "absolute", bottom: `${22 + progress * 0.52 + 5}%`, left: "50%", transform: "translateX(-50%)", width: 56, height: 90, background: "linear-gradient(to top, rgba(255,245,160,0.12), transparent)", clipPath: "polygon(18% 100%, 82% 100%, 100% 0%, 0% 0%)", zIndex: 15 }} />}
       {phase === "at-restaurant" && order && <AtRestaurantOverlay order={order} />}
       {phase === "delivered" && <DeliveredOverlay />}
     </div>
@@ -622,9 +622,19 @@ function Skyline() {
     { left: "73%", w: 26, h: 100 }, { left: "80%", w: 18, h: 70 }, { left: "86%", w: 32, h: 140 },
   ];
   return (
-    <div style={{ position: "absolute", bottom: "28%", left: 0, right: 0, height: 160, overflow: "hidden" }}>
+    <div style={{ position: "absolute", bottom: "30%", left: 0, right: 0, height: 160, overflow: "hidden" }}>
       {buildings.map((b, i) => (
-        <div key={i} style={{ position: "absolute", bottom: 0, left: b.left, width: b.w, height: b.h, background: `hsl(${220 + i * 5}, 15%, ${8 + (i % 3) * 3}%)`, borderTop: "1px solid rgba(255,255,255,0.04)" }} />
+        <div key={i} style={{
+          position: "absolute", bottom: 0, left: b.left, width: b.w, height: b.h,
+          background: `hsl(${225 + i * 5}, 20%, ${7 + (i % 4) * 2}%)`,
+          borderTop: "1px solid rgba(255,255,255,0.03)",
+        }}>
+          {Array.from({ length: Math.floor(b.h / 14) }).map((_, j) => (
+            Math.random() > 0.6 ? (
+              <div key={j} style={{ position: "absolute", left: 4, top: j * 14 + 3, width: 4, height: 5, background: "#FFD70040", borderRadius: 1 }} />
+            ) : null
+          ))}
+        </div>
       ))}
     </div>
   );
@@ -632,11 +642,11 @@ function Skyline() {
 
 function AtRestaurantOverlay({ order }: { order: Order }) {
   return (
-    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(2px)", zIndex: 30 }}>
+    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(3px)", zIndex: 30 }}>
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 42, marginBottom: 8 }}>{order.restaurant.emoji}</div>
-        <div style={{ color: "#06C167", fontWeight: 800, fontSize: 18 }}>Arrived!</div>
-        <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 13, marginTop: 4 }}>Collect from {order.restaurant.name}</div>
+        <div style={{ fontSize: 48, marginBottom: 10 }}>{order.restaurant.emoji}</div>
+        <div style={{ color: "#06C167", fontWeight: 800, fontSize: 20 }}>Arrived!</div>
+        <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 13, marginTop: 5 }}>Collect from {order.restaurant.name}</div>
       </div>
     </div>
   );
@@ -644,10 +654,10 @@ function AtRestaurantOverlay({ order }: { order: Order }) {
 
 function DeliveredOverlay() {
   return (
-    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)", backdropFilter: "blur(2px)", zIndex: 30 }}>
+    <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(3px)", zIndex: 30 }}>
       <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: 42, marginBottom: 8 }}>✅</div>
-        <div style={{ color: "#06C167", fontWeight: 800, fontSize: 18 }}>Delivered!</div>
+        <div style={{ fontSize: 52, marginBottom: 10 }}>✅</div>
+        <div style={{ color: "#06C167", fontWeight: 800, fontSize: 20 }}>Delivered!</div>
       </div>
     </div>
   );
@@ -670,18 +680,17 @@ function VerificationModal({ driverCode, onSuccess, onFail }: { driverCode: stri
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(6px)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px" }}>
-      <div style={{ background: "#1a1a1a", borderRadius: 20, padding: "28px 24px", width: "100%", maxWidth: 360, border: "1px solid rgba(255,255,255,0.1)" }}>
-        <div style={{ fontSize: 40, textAlign: "center", marginBottom: 14 }}>🔒</div>
-        <div style={{ color: "#fff", fontWeight: 800, fontSize: 20, textAlign: "center", marginBottom: 6 }}>Identity Check</div>
-        <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 13, textAlign: "center", marginBottom: 24 }}>Every 3 deliveries we verify your identity.</div>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", backdropFilter: "blur(8px)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 24px" }}>
+      <div style={{ background: "#111", borderRadius: 22, padding: "30px 24px", width: "100%", maxWidth: 360, border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div style={{ width: 56, height: 56, borderRadius: 16, background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, margin: "0 auto 18px" }}>🔒</div>
+        <div style={{ color: "#fff", fontWeight: 800, fontSize: 20, textAlign: "center", marginBottom: 6, letterSpacing: "-0.3px" }}>Identity Check</div>
+        <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, textAlign: "center", marginBottom: 24 }}>Enter your driver code to continue</div>
         <input autoFocus value={input} onChange={e => { setInput(e.target.value.toUpperCase()); setError(""); }}
           placeholder="DRV-000000" onKeyDown={e => e.key === "Enter" && input.trim() && handleVerify()}
-          style={{ width: "100%", boxSizing: "border-box", background: "#2a2a2a", border: error ? "1.5px solid #e53935" : "1.5px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px", color: "#fff", fontSize: 18, fontWeight: 700, caretColor: "#06C167", fontFamily: "monospace", letterSpacing: "0.08em" }} />
-        {error && <div style={{ color: "#e53935", fontSize: 12, marginTop: 8 }}>{error}</div>}
-        <button onClick={handleVerify} disabled={!input.trim() || attempts >= 3}
-          style={{ width: "100%", marginTop: 16, background: "#06C167", border: "none", borderRadius: 12, color: "#fff", fontWeight: 800, fontSize: 16, padding: "14px", cursor: "pointer", opacity: input.trim() && attempts < 3 ? 1 : 0.5 }}>
-          Verify
+          style={{ width: "100%", boxSizing: "border-box", background: "#1a1a1a", border: error ? "2px solid #FF3B30" : "2px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "16px", color: "#fff", fontSize: 18, fontWeight: 700, caretColor: "#06C167", fontFamily: "monospace", letterSpacing: "0.08em" }} />
+        {error && <div style={{ color: "#FF3B30", fontSize: 12, marginTop: 8 }}>{error}</div>}
+        <button onClick={handleVerify} disabled={!input.trim() || attempts >= 3} style={{ width: "100%", marginTop: 16, background: input.trim() && attempts < 3 ? "#06C167" : "#222", border: "none", borderRadius: 100, color: "#fff", fontWeight: 800, fontSize: 16, padding: "16px", cursor: input.trim() && attempts < 3 ? "pointer" : "default" }}>
+          Verify Identity
         </button>
       </div>
     </div>
@@ -690,10 +699,10 @@ function VerificationModal({ driverCode, onSuccess, onFail }: { driverCode: stri
 
 // ─── Panels ───────────────────────────────────────────────────────────────────
 
-function Panel({ children, noBorder }: { children: React.ReactNode; noBorder?: boolean }) {
+function Panel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ background: "#1a1a1a", borderRadius: noBorder ? 0 : "18px 18px 0 0", boxShadow: "0 -4px 20px rgba(0,0,0,0.4)", animation: "slideUp 0.22s ease" }}>
-      {!noBorder && <div style={{ width: 32, height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 2, margin: "10px auto 12px" }} />}
+    <div style={{ background: "#111", borderRadius: "20px 20px 0 0", boxShadow: "0 -6px 30px rgba(0,0,0,0.5)", animation: "slideUp 0.22s ease" }}>
+      <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 2, margin: "12px auto 14px" }} />
       {children}
     </div>
   );
@@ -701,9 +710,9 @@ function Panel({ children, noBorder }: { children: React.ReactNode; noBorder?: b
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div style={{ flex: 1, background: "#242424", borderRadius: 10, padding: "10px 0", textAlign: "center" }}>
+    <div style={{ flex: 1, background: "#1a1a1a", borderRadius: 12, padding: "10px 0", textAlign: "center" }}>
       <div style={{ color: "#fff", fontWeight: 700, fontSize: 15 }}>{value}</div>
-      <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 10, marginTop: 3 }}>{label}</div>
+      <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 10, marginTop: 3 }}>{label}</div>
     </div>
   );
 }
@@ -713,24 +722,26 @@ function NavPanel({ direction, order, progress }: { direction: "to-restaurant" |
   const color = toRest ? "#06C167" : "#276EF1";
   return (
     <Panel>
-      <div style={{ padding: "0 16px 20px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <div style={{ width: 7, height: 7, borderRadius: "50%", background: color, animation: "pulse 1.2s ease-in-out infinite" }} />
-          <span style={{ color: "#fff", fontWeight: 800, fontSize: 16 }}>{toRest ? "Head to restaurant" : "Head to customer"}</span>
+      <div style={{ padding: "0 16px 22px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: color, animation: "pulse 1.2s ease-in-out infinite" }} />
+          <span style={{ color: "#fff", fontWeight: 800, fontSize: 16 }}>{toRest ? "Go to restaurant" : "Head to customer"}</span>
           <span style={{ marginLeft: "auto", color, fontWeight: 700, fontSize: 13 }}>{Math.round(progress)}%</span>
         </div>
-        <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 4, height: 4, overflow: "hidden", marginBottom: 12 }}>
+        <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 4, height: 4, overflow: "hidden", marginBottom: 14 }}>
           <div style={{ height: "100%", borderRadius: 4, background: color, width: `${progress}%`, transition: "width 0.3s ease" }} />
         </div>
-        <div style={{ background: "#242424", borderRadius: 10, padding: "10px 12px", display: "flex", gap: 10, alignItems: "center" }}>
-          <span style={{ fontSize: 18 }}>{toRest ? order.restaurant.emoji : "🏠"}</span>
-          <div>
-            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 10, fontWeight: 700, letterSpacing: "0.4px", textTransform: "uppercase" }}>{toRest ? "Pickup" : "Dropoff"}</div>
-            <div style={{ color: "#fff", fontSize: 13, fontWeight: 500 }}>{toRest ? order.restaurant.address : order.customer.address}</div>
+        <div style={{ background: "#1a1a1a", borderRadius: 12, padding: "12px 14px", display: "flex", gap: 12, alignItems: "center" }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: toRest ? (order.restaurant.color + "22") : "#276EF122", border: `1.5px solid ${color}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
+            {toRest ? order.restaurant.emoji : "🏠"}
           </div>
-          <div style={{ marginLeft: "auto", textAlign: "right" }}>
-            <div style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>{fmt(order.total)}</div>
-            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 10 }}>{order.distance}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase" }}>{toRest ? "Pickup at" : "Deliver to"}</div>
+            <div style={{ color: "#fff", fontSize: 12, fontWeight: 500, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{toRest ? order.restaurant.address : order.customer.address}</div>
+          </div>
+          <div style={{ textAlign: "right", flexShrink: 0 }}>
+            <div style={{ color: "#06C167", fontWeight: 800, fontSize: 14 }}>{fmt(order.total)}</div>
+            <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 10, marginTop: 1 }}>{order.distance}</div>
           </div>
         </div>
       </div>
@@ -741,19 +752,26 @@ function NavPanel({ direction, order, progress }: { direction: "to-restaurant" |
 function PickupPanel({ order, onPickedUp }: { order: Order; onPickedUp: () => void }) {
   return (
     <Panel>
-      <div style={{ padding: "0 16px 20px" }}>
-        <div style={{ color: "#06C167", fontWeight: 800, fontSize: 18, marginBottom: 4 }}>You've arrived!</div>
-        <div style={{ color: "rgba(255,255,255,0.45)", fontSize: 13, marginBottom: 12 }}>Collect order from {order.restaurant.name}</div>
-        <div style={{ background: "#242424", borderRadius: 10, padding: "10px 12px", marginBottom: 12 }}>
+      <div style={{ padding: "0 16px 22px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: order.restaurant.color + "22", border: `1.5px solid ${order.restaurant.color}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+            {order.restaurant.emoji}
+          </div>
+          <div>
+            <div style={{ color: "#06C167", fontWeight: 800, fontSize: 17 }}>You've arrived!</div>
+            <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 2 }}>Collect from {order.restaurant.name}</div>
+          </div>
+        </div>
+        <div style={{ background: "#1a1a1a", borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
           {order.items.map((item, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: i < order.items.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
-              <span style={{ color: "rgba(255,255,255,0.65)", fontSize: 12 }}>{item.name}</span>
-              <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 11 }}>{fmt(item.price)}</span>
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: i < order.items.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none" }}>
+              <span style={{ color: "rgba(255,255,255,0.6)", fontSize: 13 }}>{item.name}</span>
+              <span style={{ color: "rgba(255,255,255,0.25)", fontSize: 12 }}>{fmt(item.price)}</span>
             </div>
           ))}
         </div>
-        <button className="ubtn" onClick={onPickedUp} style={{ width: "100%", background: "#06C167", border: "none", borderRadius: 11, color: "#fff", fontWeight: 700, fontSize: 15, padding: "14px" }}>
-          Picked Up — Start Delivery
+        <button className="ubtn" onClick={onPickedUp} style={{ width: "100%", background: "#06C167", border: "none", borderRadius: 100, color: "#fff", fontWeight: 800, fontSize: 16, padding: "16px" }}>
+          Picked Up · Start Delivery
         </button>
       </div>
     </Panel>
@@ -764,39 +782,40 @@ function DeliveredPanel({ order, tip, rankedUp, onNext }: { order: Order; tip: n
   const total = (order.total + tip).toFixed(2);
   return (
     <Panel>
-      <div style={{ padding: "0 16px 22px" }}>
+      <div style={{ padding: "0 16px 24px" }}>
         {rankedUp ? (
-          <div style={{ background: rankedUp.gradient, borderRadius: 12, padding: "14px", marginBottom: 14, textAlign: "center", animation: "rankUp 0.5s ease", boxShadow: `0 0 24px ${rankedUp.color}66` }}>
-            <div style={{ fontSize: 32, marginBottom: 6 }}>{rankedUp.icon}</div>
+          <div style={{ background: rankedUp.gradient, borderRadius: 14, padding: "16px", marginBottom: 16, textAlign: "center", animation: "rankUp 0.5s ease", boxShadow: `0 0 28px ${rankedUp.color}66` }}>
+            <div style={{ fontSize: 36, marginBottom: 6 }}>{rankedUp.icon}</div>
             <div style={{ color: "#fff", fontWeight: 800, fontSize: 18 }}>Rank Up! You're now {rankedUp.name}</div>
+            {rankedUp.perks.map(p => <div key={p} style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, marginTop: 4 }}>✓ {p}</div>)}
           </div>
         ) : (
-          <div style={{ textAlign: "center", marginBottom: 14 }}>
-            <div style={{ fontSize: 36, marginBottom: 6 }}>✅</div>
+          <div style={{ textAlign: "center", marginBottom: 16 }}>
+            <div style={{ fontSize: 40, marginBottom: 8 }}>✅</div>
             <div style={{ color: "#fff", fontWeight: 800, fontSize: 18 }}>Delivery Complete!</div>
-            <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12, marginTop: 3 }}>Delivered to {order.customer.name}</div>
+            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, marginTop: 4 }}>Delivered to {order.customer.name}</div>
           </div>
         )}
-        <div style={{ background: "#242424", borderRadius: 12, padding: "12px 14px", marginBottom: 12 }}>
+        <div style={{ background: "#1a1a1a", borderRadius: 14, padding: "14px 16px", marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-            <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 13 }}>Delivery fare</span>
+            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Delivery fare</span>
             <span style={{ color: "#fff", fontWeight: 600, fontSize: 13 }}>{fmt(order.total)}</span>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-            <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 13 }}>Tip</span>
-            <span style={{ color: tip > 0 ? "#06C167" : "rgba(255,255,255,0.3)", fontWeight: 600, fontSize: 13 }}>{fmt(tip)}</span>
+            <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 13 }}>Tip</span>
+            <span style={{ color: tip > 0 ? "#06C167" : "rgba(255,255,255,0.25)", fontWeight: 600, fontSize: 13 }}>{fmt(tip)}</span>
           </div>
-          <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 8, display: "flex", justifyContent: "space-between" }}>
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>Total earned</span>
-            <span style={{ color: "#06C167", fontWeight: 800, fontSize: 18 }}>£{total}</span>
+            <span style={{ color: "#06C167", fontWeight: 900, fontSize: 22 }}>£{total}</span>
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
           <StatCard label="Distance" value={order.distance} />
           <StatCard label="Duration" value={order.duration} />
-          <StatCard label="Customer" value={`${order.customer.rating}⭐`} />
+          <StatCard label="Rating" value={`${order.customer.rating}★`} />
         </div>
-        <button className="ubtn" onClick={onNext} style={{ width: "100%", background: "#06C167", border: "none", borderRadius: 11, color: "#fff", fontWeight: 700, fontSize: 15, padding: "14px" }}>
+        <button className="ubtn" onClick={onNext} style={{ width: "100%", background: "#06C167", border: "none", borderRadius: 100, color: "#fff", fontWeight: 800, fontSize: 16, padding: "16px" }}>
           Back to Map
         </button>
       </div>
@@ -812,6 +831,7 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
   const sessionTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const orderSpawnTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressRef = useRef(0);
+  const orderTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   function loadState() {
     try { const r = localStorage.getItem(stateKey); if (r) return JSON.parse(r); } catch { }
@@ -836,11 +856,12 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
   const [sideMenuOpen, setSideMenuOpen] = useState(false);
   const [cooldownSec, setCooldownSec] = useState(0);
   const [cooldownInterval, setCooldownIntervalState] = useState<ReturnType<typeof setInterval> | null>(null);
+  const [orderTimer, setOrderTimer] = useState(0);
+  const ORDER_TIMEOUT = 15;
 
   const isBusy = busyZones.length >= 2;
   const maxMultiplier = busyZones.length > 0 ? Math.max(...busyZones.map(z => z.multiplier)) : 1;
 
-  // Save state
   useEffect(() => {
     const raw = localStorage.getItem(stateKey);
     const state = raw ? JSON.parse(raw) : {};
@@ -849,7 +870,6 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     localStorage.setItem(stateKey, JSON.stringify(state));
   }, [totalEarnings, tripCount]);
 
-  // Session timer
   useEffect(() => {
     if (phase === "offline") {
       if (sessionTimerRef.current) { clearInterval(sessionTimerRef.current); sessionTimerRef.current = null; }
@@ -858,13 +878,38 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     }
   }, [phase]);
 
-  // Busy zone rotation
   useEffect(() => {
     if (phase === "offline") return;
     setBusyZones(pickBusyZones());
     const iv = setInterval(() => setBusyZones(pickBusyZones()), 45000);
     return () => clearInterval(iv);
   }, [phase === "offline"]);
+
+  // Order countdown timer
+  useEffect(() => {
+    if (phase === "selecting") {
+      setOrderTimer(ORDER_TIMEOUT);
+      if (orderTimerRef.current) clearInterval(orderTimerRef.current);
+      orderTimerRef.current = setInterval(() => {
+        setOrderTimer(t => {
+          if (t <= 1) {
+            if (orderTimerRef.current) clearInterval(orderTimerRef.current);
+            // auto-decline all orders
+            setSelectedOrderCard(null);
+            setAvailableOrders([]);
+            phaseRef.current = "online";
+            setPhase("online");
+            scheduleNextOrders();
+            return 0;
+          }
+          return t - 1;
+        });
+      }, 1000);
+    } else {
+      if (orderTimerRef.current) { clearInterval(orderTimerRef.current); orderTimerRef.current = null; }
+    }
+    return () => { if (orderTimerRef.current) clearInterval(orderTimerRef.current); };
+  }, [phase === "selecting"]);
 
   function fmtTime(s: number) {
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sc = s % 60;
@@ -904,100 +949,119 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     const cooldownSecs = Math.floor(cooldown / 1000);
     phaseRef.current = "online";
     setPhase("online");
-    setAvailableOrders([]);
     startCooldown(cooldownSecs, () => {
       if (phaseRef.current === "online") spawnOrders();
     });
   }, [isBusy, spawnOrders]);
 
-  const handleGoOnline = useCallback(() => {
-    playTap();
+  function handleGoOnline() {
     phaseRef.current = "online";
     setPhase("online");
-    // Spawn first batch quickly
-    const delay = Math.floor(rand(3000, 6000));
-    orderSpawnTimeout.current = setTimeout(() => {
+    setBusyZones(pickBusyZones());
+    playTap();
+    startCooldown(8, () => {
       if (phaseRef.current === "online") spawnOrders();
-    }, delay);
-  }, [spawnOrders]);
+    });
+  }
 
-  const handleGoOffline = useCallback(() => {
+  function handleGoOffline() {
     if (moveInterval.current) clearInterval(moveInterval.current);
     if (orderSpawnTimeout.current) clearTimeout(orderSpawnTimeout.current);
     if (cooldownInterval) clearInterval(cooldownInterval);
-    setCooldownSec(0);
+    if (orderTimerRef.current) clearInterval(orderTimerRef.current);
     phaseRef.current = "offline";
     setPhase("offline");
     setAvailableOrders([]);
     setSelectedOrderCard(null);
-    if (sessionTimerRef.current) { clearInterval(sessionTimerRef.current); sessionTimerRef.current = null; }
-  }, [cooldownInterval]);
+    setCooldownSec(0);
+    playTap();
+  }
 
-  const handleAcceptOrder = useCallback((order: Order) => {
-    setAvailableOrders([]);
+  function handleAcceptOrder(order: Order) {
+    if (orderTimerRef.current) clearInterval(orderTimerRef.current);
     setSelectedOrderCard(null);
+    setAvailableOrders([]);
     setActiveOrder(order);
-    setCurrentTip(pick(TIPS));
-    playAccept();
     phaseRef.current = "to-restaurant";
     setPhase("to-restaurant");
     progressRef.current = 0;
     setProgress(0);
-    const steps = Math.floor(rand(100, 180));
-    if (moveInterval.current) clearInterval(moveInterval.current);
-    moveInterval.current = setInterval(() => {
-      progressRef.current = Math.min(100, progressRef.current + (100 / steps));
-      setProgress(Math.min(100, progressRef.current));
-      if (progressRef.current >= 100) {
-        clearInterval(moveInterval.current!); moveInterval.current = null;
-        phaseRef.current = "at-restaurant"; setPhase("at-restaurant");
-        playArrived();
-      }
-    }, 100);
-  }, []);
+    playAccept();
 
-  const handlePickedUp = useCallback(() => {
-    playTap();
-    phaseRef.current = "to-customer"; setPhase("to-customer");
-    progressRef.current = 0; setProgress(0);
-    const steps = Math.floor(rand(120, 200));
-    if (moveInterval.current) clearInterval(moveInterval.current);
-    moveInterval.current = setInterval(() => {
-      progressRef.current = Math.min(100, progressRef.current + (100 / steps));
-      setProgress(Math.min(100, progressRef.current));
-      if (progressRef.current >= 100) {
-        clearInterval(moveInterval.current!); moveInterval.current = null;
-        phaseRef.current = "delivered"; setPhase("delivered");
-        // Delivery complete
-        const prev = getRank(tripCount);
-        const newCount = tripCount + 1;
-        const newRank = getRank(newCount);
-        setTripCount(newCount);
-        setTotalEarnings(e => parseFloat((e + (activeOrder?.total ?? 0) + currentTip).toFixed(2)));
-        if (newRank.name !== prev.name) { setRankedUp(newRank); setTimeout(() => playRankUp(), 400); } else { playDelivered(); }
-      }
-    }, 100);
-  }, [activeOrder, tripCount, currentTip]);
-
-  const handleNextAfterDelivery = useCallback(() => {
-    setRankedUp(null);
-    const newCount = tripCount;
-    if (newCount > 0 && newCount % 3 === 0) {
+    // Check if verification needed
+    const raw = localStorage.getItem(stateKey);
+    const state = raw ? JSON.parse(raw) : {};
+    const count = (state.tripCount ?? 0);
+    if (count > 0 && count % 3 === 0) {
       setShowVerification(true);
-      return;
     }
-    scheduleNextOrders();
-  }, [tripCount, scheduleNextOrders]);
 
-  const handleVerificationSuccess = useCallback(() => {
+    startMovement("to-restaurant", order);
+  }
+
+  function startMovement(dir: "to-restaurant" | "to-customer", order: Order) {
+    if (moveInterval.current) clearInterval(moveInterval.current);
+    progressRef.current = 0;
+    setProgress(0);
+    const duration = parseInt(pick(DURATIONS)) * 1000 * 0.6;
+    const steps = 80;
+    const stepTime = duration / steps;
+    let step = 0;
+    moveInterval.current = setInterval(() => {
+      step++;
+      const p = Math.min(100, (step / steps) * 100);
+      progressRef.current = p;
+      setProgress(p);
+      if (p >= 100) {
+        clearInterval(moveInterval.current!);
+        if (dir === "to-restaurant") {
+          phaseRef.current = "at-restaurant";
+          setPhase("at-restaurant");
+          playArrived();
+        } else {
+          phaseRef.current = "delivered";
+          setPhase("delivered");
+          const tip = pick(TIPS);
+          setCurrentTip(tip);
+          const earned = parseFloat((order.total + tip).toFixed(2));
+          setTotalEarnings(prev => parseFloat((prev + earned).toFixed(2)));
+          const newCount = tripCount + 1;
+          setTripCount(newCount);
+          const prevRank = getRank(tripCount);
+          const newRank = getRank(newCount);
+          if (newRank.name !== prevRank.name) {
+            setRankedUp(newRank);
+            playRankUp();
+          } else {
+            setRankedUp(null);
+            playDelivered();
+          }
+        }
+      }
+    }, stepTime);
+  }
+
+  function handlePickedUp() {
+    phaseRef.current = "to-customer";
+    setPhase("to-customer");
+    progressRef.current = 0;
+    setProgress(0);
+    if (activeOrder) startMovement("to-customer", activeOrder);
+  }
+
+  function handleNextAfterDelivery() {
+    setActiveOrder(null);
+    scheduleNextOrders();
+  }
+
+  function handleVerificationSuccess() {
     setShowVerification(false);
-    scheduleNextOrders();
-  }, [scheduleNextOrders]);
+  }
 
-  const handleVerificationFail = useCallback(() => {
+  function handleVerificationFail() {
     setShowVerification(false);
     handleGoOffline();
-  }, [handleGoOffline]);
+  }
 
   const handleCashOut = useCallback(() => {
     const amount = totalEarnings;
@@ -1016,301 +1080,255 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
   const isDeliveryPhase = phase === "to-restaurant" || phase === "at-restaurant" || phase === "to-customer" || phase === "delivered";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "'Inter',-apple-system,sans-serif", background: "#111", overflow: "hidden" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", fontFamily: "'Inter',-apple-system,sans-serif", background: "#000", overflow: "hidden" }}>
 
-      {/* ── Modals ── */}
       {showVerification && (
         <VerificationModal driverCode={profile.driverCode} onSuccess={handleVerificationSuccess} onFail={handleVerificationFail} />
       )}
 
-      {/* ── Side Menu ── */}
-      <SideMenu
-        isOpen={sideMenuOpen}
-        profile={profile}
-        earnings={totalEarnings}
-        tripCount={tripCount}
-        onClose={() => setSideMenuOpen(false)}
-        onUpdateProfile={handleUpdateProfile}
-        onCashOut={handleCashOut}
-        stateKey={stateKey}
-      />
+      <SideMenu isOpen={sideMenuOpen} profile={profile} earnings={totalEarnings} tripCount={tripCount}
+        onClose={() => setSideMenuOpen(false)} onUpdateProfile={handleUpdateProfile}
+        onCashOut={handleCashOut} stateKey={stateKey} />
 
-      {/* ── Cash Out Toast ── */}
+      {/* Cash Out Toast */}
       {showCashOutMsg && (
-        <div style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", background: "#06C167", borderRadius: 12, padding: "12px 20px", color: "#fff", fontWeight: 700, fontSize: 14, zIndex: 400, boxShadow: "0 4px 20px rgba(6,193,103,0.4)", whiteSpace: "nowrap" }}>{showCashOutMsg}</div>
+        <div style={{ position: "fixed", top: 24, left: "50%", transform: "translateX(-50%)", background: "#06C167", borderRadius: 100, padding: "12px 22px", color: "#fff", fontWeight: 700, fontSize: 14, zIndex: 400, boxShadow: "0 4px 20px rgba(6,193,103,0.5)", whiteSpace: "nowrap", animation: "slideUp 0.25s ease" }}>
+          💸 {showCashOutMsg}
+        </div>
       )}
 
-      {/* ── MAP VIEW (offline / online / selecting) ── */}
+      {/* MAP VIEW */}
       {isMapPhase && (
         <div style={{ flex: 1, position: "relative", minHeight: 0 }}>
-          <CityMap
-            busyZones={busyZones}
-            orders={availableOrders}
-            driverPhase={phase}
-            onOrderTap={o => setSelectedOrderCard(o)}
-          />
+          <CityMap busyZones={busyZones} orders={availableOrders} driverPhase={phase} onOrderTap={o => setSelectedOrderCard(o)} />
 
-          {/* ── Top bar ── */}
-          <div style={{
-            position: "absolute", top: 0, left: 0, right: 0, zIndex: 10,
-            padding: "12px 14px", display: "flex", alignItems: "flex-start", justifyContent: "space-between",
-          }}>
-            {/* Hamburger */}
-            <button onClick={() => setSideMenuOpen(true)} style={{
-              width: 40, height: 40, borderRadius: "50%", background: "white",
-              border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-              boxShadow: "0 2px 10px rgba(0,0,0,0.2)", flexShrink: 0,
-            }}>
+          {/* Status bar / Top bar */}
+          <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, padding: "12px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+            {/* Menu button */}
+            <button onClick={() => setSideMenuOpen(true)} style={{ width: 42, height: 42, borderRadius: "50%", background: "white", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 12px rgba(0,0,0,0.18)", flexShrink: 0 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {[0,1,2].map(i => <div key={i} style={{ width: 16, height: 2, background: "#333", borderRadius: 2 }} />)}
+                {[0,1,2].map(i => <div key={i} style={{ width: 16, height: 2, background: "#1a1a1a", borderRadius: 2 }} />)}
               </div>
             </button>
 
-            {/* Earnings badge */}
-            <div style={{ background: "white", borderRadius: 24, padding: "8px 16px", boxShadow: "0 2px 12px rgba(0,0,0,0.2)", textAlign: "center" }}>
-              <div style={{ fontWeight: 900, fontSize: 20, color: "#1a1a1a", lineHeight: 1 }}>{fmt(totalEarnings)}</div>
-              <div style={{ fontSize: 10, color: "#888", fontWeight: 700, letterSpacing: "0.5px", marginTop: 2 }}>TODAY</div>
+            {/* Uber Eats Driver badge */}
+            <div style={{ background: "white", borderRadius: 20, padding: "7px 14px", boxShadow: "0 2px 12px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: "#06C167", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <span style={{ color: "#fff", fontSize: 11, fontWeight: 900 }}>U</span>
+              </div>
+              <span style={{ fontWeight: 800, fontSize: 14, color: "#1a1a1a" }}>Eats Driver</span>
             </div>
 
-            {/* Busy zone info */}
-            {busyZones.length > 0 && phase !== "offline" && (
-              <div style={{ background: "#FFF3E0", border: "1.5px solid #FF8C00", borderRadius: 12, padding: "6px 10px", boxShadow: "0 2px 8px rgba(0,0,0,0.15)" }}>
-                <div style={{ fontSize: 10, color: "#E65100", fontWeight: 800, lineHeight: 1 }}>{maxMultiplier.toFixed(1)}x</div>
-                <div style={{ fontSize: 8, color: "#F57C00", fontWeight: 600 }}>surge</div>
+            {/* Earnings + surge */}
+            <div style={{ display: "flex", gap: 8 }}>
+              {busyZones.length > 0 && phase !== "offline" && (
+                <div style={{ background: "#FFF3E0", border: "1.5px solid #FF8C00", borderRadius: 20, padding: "7px 12px", boxShadow: "0 2px 8px rgba(0,0,0,0.12)" }}>
+                  <div style={{ fontSize: 12, color: "#D84315", fontWeight: 900 }}>⚡ {maxMultiplier.toFixed(1)}×</div>
+                </div>
+              )}
+              <div style={{ background: "white", borderRadius: 20, padding: "7px 14px", boxShadow: "0 2px 12px rgba(0,0,0,0.15)", textAlign: "center" }}>
+                <div style={{ fontWeight: 900, fontSize: 16, color: "#1a1a1a", lineHeight: 1 }}>{fmt(totalEarnings)}</div>
+                <div style={{ fontSize: 9, color: "#aaa", fontWeight: 700, letterSpacing: "0.5px", marginTop: 2 }}>TODAY</div>
               </div>
-            )}
+            </div>
           </div>
 
-          {/* ── Busy zone label pills (scattered near zones) ── */}
+          {/* Busy zone labels */}
           {phase !== "offline" && busyZones.map(z => (
             <div key={z.id} style={{
               position: "absolute",
               top: `${(z.y / 520) * 100}%`,
               left: `${(z.x / 440) * 100}%`,
               transform: "translate(-50%, -50%)",
-              background: "rgba(200,50,0,0.82)", color: "white",
-              borderRadius: 10, padding: "2px 8px", fontSize: 9, fontWeight: 700,
+              background: "rgba(210,60,0,0.85)", color: "white",
+              borderRadius: 12, padding: "3px 10px", fontSize: 9.5, fontWeight: 700,
               pointerEvents: "none", whiteSpace: "nowrap",
-              boxShadow: "0 1px 6px rgba(0,0,0,0.3)",
-            }}>{z.label} {z.multiplier.toFixed(1)}x</div>
+              boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+            }}>{z.label} {z.multiplier.toFixed(1)}×</div>
           ))}
 
-          {/* ── Bottom bar ── */}
-          <div style={{
-            position: "absolute", bottom: 0, left: 0, right: 0,
-            background: "white", borderTop: "1px solid #e8e8e8",
-            padding: "0 20px 8px",
-          }}>
-            {/* Cooldown indicator */}
+          {/* Bottom bar */}
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "white", borderTop: "1px solid #ebebeb", borderRadius: "16px 16px 0 0", boxShadow: "0 -2px 20px rgba(0,0,0,0.1)" }}>
             {phase === "online" && cooldownSec > 0 && (
-              <div style={{ textAlign: "center", padding: "10px 0 6px", color: "#888", fontSize: 12 }}>
-                Next orders in <span style={{ fontWeight: 700, color: "#444" }}>{cooldownSec}s</span>
+              <div style={{ textAlign: "center", paddingTop: 12, paddingBottom: 2, color: "#888", fontSize: 12 }}>
+                Next orders in <span style={{ fontWeight: 700, color: "#1a1a1a" }}>{cooldownSec}s</span>
               </div>
             )}
 
-            {/* Status + controls */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0" }}>
-              <button onClick={() => setSideMenuOpen(true)} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  <div style={{ width: 18, height: 2, background: "#666", borderRadius: 2 }} />
-                  <div style={{ width: 14, height: 2, background: "#999", borderRadius: 2 }} />
-                  <div style={{ width: 18, height: 2, background: "#666", borderRadius: 2 }} />
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px" }}>
+              <button onClick={() => setSideMenuOpen(true)} style={{ background: "none", border: "none", cursor: "pointer", padding: 6, borderRadius: "50%" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 3.5 }}>
+                  <div style={{ width: 18, height: 2, background: "#444", borderRadius: 2 }} />
+                  <div style={{ width: 14, height: 2, background: "#888", borderRadius: 2 }} />
+                  <div style={{ width: 18, height: 2, background: "#444", borderRadius: 2 }} />
                 </div>
               </button>
 
               {phase === "offline" ? (
-                <button onClick={handleGoOnline} style={{ background: "#06C167", border: "none", borderRadius: 24, color: "white", fontWeight: 800, fontSize: 15, padding: "12px 36px", cursor: "pointer", boxShadow: "0 4px 16px rgba(6,193,103,0.4)" }}>
+                <button onClick={handleGoOnline} style={{ background: "#06C167", border: "none", borderRadius: 100, color: "white", fontWeight: 800, fontSize: 16, padding: "14px 40px", cursor: "pointer", boxShadow: "0 4px 20px rgba(6,193,103,0.45)", letterSpacing: "-0.2px" }}>
                   Go Online
                 </button>
               ) : (
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#06C167", animation: "pulse 1.5s ease-in-out infinite" }} />
-                  <span style={{ fontWeight: 700, fontSize: 15, color: "#1a1a1a" }}>You're online</span>
+                  <div style={{ width: 9, height: 9, borderRadius: "50%", background: "#06C167", animation: "pulse 1.5s ease-in-out infinite", boxShadow: "0 0 0 3px rgba(6,193,103,0.2)" }} />
+                  <span style={{ fontWeight: 700, fontSize: 15, color: "#1a1a1a" }}>You're Online</span>
                 </div>
               )}
 
               {phase !== "offline" ? (
-                <button onClick={handleGoOffline} style={{ background: "none", border: "1.5px solid #ddd", borderRadius: 20, color: "#666", fontWeight: 700, fontSize: 12, padding: "8px 14px", cursor: "pointer" }}>
+                <button onClick={handleGoOffline} style={{ background: "none", border: "1.5px solid #e0e0e0", borderRadius: 100, color: "#666", fontWeight: 700, fontSize: 12, padding: "8px 16px", cursor: "pointer" }}>
                   Pause
                 </button>
               ) : (
-                <div style={{ width: 40 }} />
+                <div style={{ width: 44 }} />
               )}
             </div>
 
-            {/* Stats strip (online) */}
-            {phase !== "offline" && (
-              <div style={{ display: "flex", gap: 10, paddingBottom: 6, borderTop: "1px solid #f0f0f0", paddingTop: 8 }}>
-                <div style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: "#1a1a1a" }}>{tripCount}</div>
-                  <div style={{ fontSize: 10, color: "#aaa" }}>Trips</div>
+            {/* Stats strip */}
+            <div style={{ display: "flex", gap: 0, paddingBottom: 16, paddingLeft: 16, paddingRight: 16, borderTop: "1px solid #f5f5f5" }}>
+              {[
+                { v: String(tripCount), l: "Trips" },
+                { v: fmt(totalEarnings), l: "Earned" },
+                { v: fmtTime(sessionTime), l: "Online" },
+                { v: `${rank.icon} ${rank.name}`, l: "Pro Status" },
+              ].map((s, i) => (
+                <div key={i} style={{ flex: 1, textAlign: "center", paddingTop: 10 }}>
+                  <div style={{ fontWeight: 800, fontSize: 13, color: i === 1 ? "#06C167" : "#1a1a1a" }}>{s.v}</div>
+                  <div style={{ fontSize: 9.5, color: "#bbb", marginTop: 2, fontWeight: 600 }}>{s.l}</div>
                 </div>
-                <div style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: "#06C167" }}>{fmt(totalEarnings)}</div>
-                  <div style={{ fontSize: 10, color: "#aaa" }}>Earned</div>
-                </div>
-                <div style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: "#1a1a1a" }}>{fmtTime(sessionTime)}</div>
-                  <div style={{ fontSize: 10, color: "#aaa" }}>Online</div>
-                </div>
-                <div style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: "#1a1a1a" }}>{rank.icon} {rank.name}</div>
-                  <div style={{ fontSize: 10, color: "#aaa" }}>Rank</div>
-                </div>
-              </div>
-            )}
-
-            {/* Offline stats */}
-            {phase === "offline" && (
-              <div style={{ display: "flex", gap: 10, paddingBottom: 6, borderTop: "1px solid #f0f0f0", paddingTop: 8 }}>
-                <div style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: "#1a1a1a" }}>{tripCount}</div>
-                  <div style={{ fontSize: 10, color: "#aaa" }}>Trips</div>
-                </div>
-                <div style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: "#06C167" }}>{fmt(totalEarnings)}</div>
-                  <div style={{ fontSize: 10, color: "#aaa" }}>Balance</div>
-                </div>
-                <div style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: "#1a1a1a" }}>{rank.icon}</div>
-                  <div style={{ fontSize: 10, color: "#aaa" }}>{rank.name}</div>
-                </div>
-                <div style={{ flex: 1, textAlign: "center" }}>
-                  <button onClick={handleCashOut} disabled={totalEarnings <= 0} style={{ background: "none", border: "1.5px solid #06C167", borderRadius: 10, color: "#06C167", fontSize: 11, fontWeight: 700, padding: "4px 8px", cursor: totalEarnings > 0 ? "pointer" : "default", opacity: totalEarnings > 0 ? 1 : 0.4 }}>
-                    Cash Out
-                  </button>
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── ORDER SELECTION SHEET (bottom sheet on map) ── */}
+      {/* ORDER SELECTION SHEET */}
       {phase === "selecting" && availableOrders.length > 0 && !selectedOrderCard && (
-        <div style={{
-          position: "absolute", bottom: 80, left: 0, right: 0, zIndex: 20,
-          padding: "0 14px",
-          animation: "slideUp 0.25s ease",
-        }}>
-          <div style={{ color: "#fff", fontWeight: 800, fontSize: 15, marginBottom: 10, textShadow: "0 1px 4px rgba(0,0,0,0.5)", textAlign: "center" }}>
-            {availableOrders.length} order{availableOrders.length !== 1 ? "s" : ""} nearby — tap to review
+        <div style={{ position: "absolute", bottom: 100, left: 0, right: 0, zIndex: 20, padding: "0 14px", animation: "slideUp 0.25s ease" }}>
+          <div style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(6px)", borderRadius: 14, padding: "10px 14px", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>
+              {availableOrders.length} order{availableOrders.length !== 1 ? "s" : ""} nearby
+            </span>
+            <CountdownRing seconds={orderTimer} total={ORDER_TIMEOUT} />
           </div>
           <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
             {availableOrders.map(o => (
               <div key={o.id} onClick={() => setSelectedOrderCard(o)} style={{
-                background: "white", borderRadius: 16, padding: "12px 14px", minWidth: 170, flexShrink: 0,
-                boxShadow: "0 4px 20px rgba(0,0,0,0.3)", cursor: "pointer",
-                border: "2px solid transparent",
+                background: "white", borderRadius: 18, padding: "14px 16px", minWidth: 180, flexShrink: 0,
+                boxShadow: "0 6px 24px rgba(0,0,0,0.35)", cursor: "pointer",
                 transition: "transform 0.15s",
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: o.restaurant.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{o.restaurant.emoji}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 10, background: o.restaurant.color + "18", border: `1.5px solid ${o.restaurant.color}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{o.restaurant.emoji}</div>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 12, color: "#1a1a1a" }}>{o.restaurant.name}</div>
-                    <div style={{ fontSize: 10, color: "#888" }}>{o.duration} · {o.distance}</div>
+                    <div style={{ fontSize: 11, color: "#999" }}>{o.duration} · {o.distance}</div>
                   </div>
                 </div>
-                <div style={{ fontWeight: 900, fontSize: 20, color: "#06C167" }}>{fmt(o.total)}</div>
-                <div style={{ fontSize: 10, color: "#bbb", marginTop: 2 }}>{o.items.length} item{o.items.length !== 1 ? "s" : ""}</div>
+                <div style={{ fontWeight: 900, fontSize: 22, color: "#06C167", letterSpacing: "-0.5px" }}>{fmt(o.total)}</div>
+                <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>{o.items.length} item{o.items.length !== 1 ? "s" : ""}</div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* ── ORDER DETAIL MODAL (when one is selected) ── */}
+      {/* ORDER DETAIL MODAL */}
       {selectedOrderCard && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 150, display: "flex", alignItems: "flex-end", animation: "fadeIn 0.2s ease" }}>
-          <div style={{ background: "#1a1a1a", borderRadius: "20px 20px 0 0", padding: "20px 20px 36px", width: "100%", animation: "slideUp 0.25s ease" }}>
-            <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.15)", borderRadius: 2, margin: "0 auto 16px" }} />
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 150, display: "flex", alignItems: "flex-end", animation: "fadeIn 0.2s ease" }}>
+          <div style={{ background: "#111", borderRadius: "22px 22px 0 0", padding: "0 0 36px", width: "100%", animation: "slideUp 0.25s ease" }}>
+            <div style={{ width: 36, height: 4, background: "rgba(255,255,255,0.12)", borderRadius: 2, margin: "14px auto 0" }} />
 
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            {/* Header with timer */}
+            <div style={{ padding: "16px 20px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
               <div>
-                <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px" }}>New Delivery</div>
-                <div style={{ color: "#06C167", fontWeight: 900, fontSize: 28, marginTop: 2 }}>{fmt(selectedOrderCard.total)}</div>
-                <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>{selectedOrderCard.duration} · {selectedOrderCard.distance}</div>
+                <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: 4 }}>New Delivery Request</div>
+                <div style={{ color: "#06C167", fontWeight: 900, fontSize: 30, letterSpacing: "-1px" }}>{fmt(selectedOrderCard.total)}</div>
+                <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 12, marginTop: 2 }}>{selectedOrderCard.duration} · {selectedOrderCard.distance}</div>
               </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ background: "#06C167", borderRadius: 6, padding: "2px 8px", color: "#fff", fontWeight: 700, fontSize: 10, marginBottom: 4, display: "inline-block" }}>EATS</div>
-                <div style={{ color: "rgba(255,255,255,0.4)", fontSize: 11 }}>{selectedOrderCard.customer.name} · {selectedOrderCard.customer.rating}⭐</div>
-              </div>
+              <CountdownRing seconds={orderTimer} total={ORDER_TIMEOUT} />
             </div>
 
-            <div style={{ background: "#242424", borderRadius: 12, padding: "10px 14px", marginBottom: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
-                <div style={{ width: 34, height: 34, borderRadius: 8, background: selectedOrderCard.restaurant.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{selectedOrderCard.restaurant.emoji}</div>
-                <div>
-                  <div style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>{selectedOrderCard.restaurant.name}</div>
-                  <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11 }}>{selectedOrderCard.restaurant.address}</div>
+            <div style={{ padding: "14px 20px" }}>
+              {/* Restaurant + items */}
+              <div style={{ background: "#1a1a1a", borderRadius: 14, padding: "12px 14px", marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: selectedOrderCard.restaurant.color + "22", border: `1.5px solid ${selectedOrderCard.restaurant.color}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{selectedOrderCard.restaurant.emoji}</div>
+                  <div>
+                    <div style={{ color: "#fff", fontWeight: 700, fontSize: 14 }}>{selectedOrderCard.restaurant.name}</div>
+                    <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 11 }}>{selectedOrderCard.restaurant.address}</div>
+                  </div>
                 </div>
+                {selectedOrderCard.items.map((item, i) => (
+                  <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+                    <span style={{ color: "rgba(255,255,255,0.45)", fontSize: 12 }}>· {item.name}</span>
+                    <span style={{ color: "rgba(255,255,255,0.25)", fontSize: 11 }}>{fmt(item.price)}</span>
+                  </div>
+                ))}
               </div>
-              {selectedOrderCard.items.map((item, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
-                  <span style={{ color: "rgba(255,255,255,0.55)", fontSize: 11 }}>· {item.name}</span>
-                  <span style={{ color: "rgba(255,255,255,0.3)", fontSize: 11 }}>{fmt(item.price)}</span>
-                </div>
-              ))}
-            </div>
 
-            <div style={{ background: "#242424", borderRadius: 12, overflow: "hidden", marginBottom: 14 }}>
-              <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "9px 14px" }}>
-                <span>{selectedOrderCard.restaurant.emoji}</span>
-                <div>
-                  <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 9, textTransform: "uppercase", fontWeight: 700 }}>Pickup</div>
-                  <div style={{ color: "#fff", fontSize: 12 }}>{selectedOrderCard.restaurant.address}</div>
+              {/* Route */}
+              <div style={{ background: "#1a1a1a", borderRadius: 14, overflow: "hidden", marginBottom: 16 }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "center", padding: "11px 14px" }}>
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#06C167", flexShrink: 0 }} />
+                  <div>
+                    <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.5px" }}>Pickup</div>
+                    <div style={{ color: "#fff", fontSize: 12, marginTop: 1 }}>{selectedOrderCard.restaurant.address}</div>
+                  </div>
+                </div>
+                <div style={{ height: 1, background: "rgba(255,255,255,0.04)", margin: "0 14px" }} />
+                <div style={{ display: "flex", gap: 12, alignItems: "center", padding: "11px 14px" }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 2, background: "#276EF1", flexShrink: 0 }} />
+                  <div>
+                    <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9, textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.5px" }}>Dropoff</div>
+                    <div style={{ color: "#fff", fontSize: 12, marginTop: 1 }}>{selectedOrderCard.customer.address}</div>
+                  </div>
+                  <div style={{ marginLeft: "auto", color: "rgba(255,255,255,0.3)", fontSize: 11 }}>{selectedOrderCard.customer.rating}⭐ · {selectedOrderCard.customer.name}</div>
                 </div>
               </div>
-              <div style={{ height: 1, background: "rgba(255,255,255,0.05)", margin: "0 14px" }} />
-              <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "9px 14px" }}>
-                <span>🏠</span>
-                <div>
-                  <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 9, textTransform: "uppercase", fontWeight: 700 }}>Dropoff</div>
-                  <div style={{ color: "#fff", fontSize: 12 }}>{selectedOrderCard.customer.address}</div>
-                </div>
-              </div>
-            </div>
 
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => {
-                setSelectedOrderCard(null);
-                const remaining = availableOrders.filter(o => o.id !== selectedOrderCard.id);
-                setAvailableOrders(remaining);
-                if (remaining.length === 0) { playDecline(); scheduleNextOrders(); }
-              }} style={{ width: 52, height: 52, background: "#2a2a2a", border: "none", borderRadius: 12, color: "#e53935", fontSize: 20, cursor: "pointer", flexShrink: 0 }}>✕</button>
-              <button className="ubtn" onClick={() => handleAcceptOrder(selectedOrderCard)} style={{ flex: 1, background: "#06C167", border: "none", borderRadius: 12, color: "#fff", fontWeight: 800, fontSize: 16, padding: "14px", cursor: "pointer" }}>
-                Accept
-              </button>
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 12 }}>
+                <button onClick={() => {
+                  setSelectedOrderCard(null);
+                  const remaining = availableOrders.filter(o => o.id !== selectedOrderCard.id);
+                  setAvailableOrders(remaining);
+                  if (remaining.length === 0) { playDecline(); scheduleNextOrders(); }
+                }} style={{ width: 54, height: 54, background: "#1a1a1a", border: "1.5px solid rgba(255,255,255,0.08)", borderRadius: 14, color: "#FF3B30", fontSize: 20, cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+                <button className="ubtn" onClick={() => handleAcceptOrder(selectedOrderCard)} style={{ flex: 1, background: "#06C167", border: "none", borderRadius: 100, color: "#fff", fontWeight: 800, fontSize: 17, cursor: "pointer", letterSpacing: "-0.2px" }}>
+                  Accept
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── DELIVERY / ROAD VIEW ── */}
+      {/* DELIVERY VIEW */}
       {isDeliveryPhase && (
         <>
           {/* Delivery top bar */}
-          <div style={{ flexShrink: 0, background: "rgba(0,0,0,0.95)", borderBottom: "1px solid rgba(255,255,255,0.06)", padding: "10px 16px", display: "flex", gap: 10, alignItems: "center" }}>
-            <div style={{ background: "#1a1a1a", borderRadius: 7, padding: "5px 9px", display: "flex", alignItems: "center", gap: 6, border: "1px solid rgba(255,255,255,0.08)" }}>
-              <span style={{ fontSize: 14 }}>{profile.avatar}</span>
+          <div style={{ flexShrink: 0, background: "#000", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "10px 16px", display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ background: "#111", borderRadius: 10, padding: "7px 11px", display: "flex", alignItems: "center", gap: 8, border: "1px solid rgba(255,255,255,0.06)" }}>
+              <span style={{ fontSize: 16 }}>{profile.avatar}</span>
               <div>
                 <div style={{ color: "#fff", fontWeight: 700, fontSize: 11 }}>{profile.name.split(" ")[0]}</div>
-                <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 9 }}>{profile.vehicleEmoji} {profile.vehicle}</div>
+                <div style={{ color: "rgba(255,255,255,0.3)", fontSize: 9 }}>{profile.vehicleEmoji} {profile.vehicle}</div>
               </div>
             </div>
-            <div style={{ background: rank.gradient, borderRadius: 7, padding: "5px 10px", display: "flex", alignItems: "center", gap: 5 }}>
+            <div style={{ background: rank.gradient, borderRadius: 10, padding: "7px 12px", display: "flex", alignItems: "center", gap: 5 }}>
               <span style={{ fontSize: 13 }}>{rank.icon}</span>
               <span style={{ color: "#fff", fontWeight: 800, fontSize: 11 }}>{rank.name}</span>
             </div>
-            <div style={{ flex: 1, display: "flex", gap: 0, background: "rgba(255,255,255,0.04)", borderRadius: 8, overflow: "hidden", border: "1px solid rgba(255,255,255,0.07)" }}>
-              <div style={{ flex: 1, padding: "6px 10px" }}>
-                <div style={{ color: "#06C167", fontWeight: 800, fontSize: 13 }}>{fmt(totalEarnings)}</div>
-                <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 9, textTransform: "uppercase" }}>Earnings</div>
+            <div style={{ flex: 1, display: "flex", gap: 0, background: "#111", borderRadius: 10, overflow: "hidden", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <div style={{ flex: 1, padding: "7px 10px" }}>
+                <div style={{ color: "#06C167", fontWeight: 800, fontSize: 14 }}>{fmt(totalEarnings)}</div>
+                <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 9, textTransform: "uppercase" }}>Earnings</div>
               </div>
-              <div style={{ width: 1, background: "rgba(255,255,255,0.07)" }} />
-              <div style={{ flex: 1, padding: "6px 10px" }}>
-                <div style={{ color: "#fff", fontWeight: 800, fontSize: 13 }}>{tripCount}</div>
-                <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 9, textTransform: "uppercase" }}>Trips</div>
+              <div style={{ width: 1, background: "rgba(255,255,255,0.06)" }} />
+              <div style={{ flex: 1, padding: "7px 10px" }}>
+                <div style={{ color: "#fff", fontWeight: 800, fontSize: 14 }}>{tripCount}</div>
+                <div style={{ color: "rgba(255,255,255,0.25)", fontSize: 9, textTransform: "uppercase" }}>Trips</div>
               </div>
             </div>
           </div>
@@ -1327,18 +1345,18 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
       )}
 
       <style>{`
-        @keyframes slideUp { from{transform:translateY(14px);opacity:0}to{transform:translateY(0);opacity:1} }
-        @keyframes fadeIn  { from{opacity:0}to{opacity:1} }
+        @keyframes slideUp    { from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1} }
+        @keyframes fadeIn     { from{opacity:0}to{opacity:1} }
         @keyframes roadScroll { from{background-position-y:0}to{background-position-y:56px} }
-        @keyframes carBounce  { from{transform:translateX(-50%) translateY(0)}to{transform:translateX(-50%) translateY(-3px)} }
-        @keyframes glow       { from{box-shadow:0 0 10px currentColor}to{box-shadow:0 0 24px currentColor} }
-        @keyframes pulse      { 0%,100%{opacity:1}50%{opacity:0.35} }
+        @keyframes carBounce  { from{transform:translateX(-50%) translateY(0)}to{transform:translateX(-50%) translateY(-4px)} }
+        @keyframes glow       { from{box-shadow:0 0 12px currentColor}to{box-shadow:0 0 28px currentColor,0 0 50px currentColor} }
+        @keyframes pulse      { 0%,100%{opacity:1}50%{opacity:0.3} }
         @keyframes rankUp     { 0%{transform:scale(0.8);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1} }
         @keyframes spin       { from{transform:rotate(0deg)}to{transform:rotate(360deg)} }
-        @keyframes mapPulse   { 0%{r:24;opacity:0.6}100%{r:36;opacity:0} }
+        @keyframes mapPulse   { 0%{r:26;opacity:0.6}100%{r:40;opacity:0} }
         .ubtn{transition:all 0.15s ease;cursor:pointer}
-        .ubtn:hover{filter:brightness(0.88)}
-        .ubtn:active{transform:scale(0.96)}
+        .ubtn:hover{filter:brightness(0.9)}
+        .ubtn:active{transform:scale(0.97)}
         ::-webkit-scrollbar{display:none}
       `}</style>
     </div>

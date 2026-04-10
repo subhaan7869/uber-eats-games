@@ -37,58 +37,78 @@ function rankPct(t: number): number { const r = getRank(t); if (!r.max) return 1
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
+// Map scale: 440px wide ≈ 5 miles  →  1px ≈ 0.01136 miles
+const MILES_PER_PX = 5 / 440;
+const DRIVER_HOME: { x: number; y: number } = { x: 220, y: 270 }; // centre of map
+
+function pxDist(ax: number, ay: number, bx: number, by: number): number {
+  return Math.sqrt((bx - ax) ** 2 + (by - ay) ** 2);
+}
+function miDist(ax: number, ay: number, bx: number, by: number): number {
+  return parseFloat((pxDist(ax, ay, bx, by) * MILES_PER_PX).toFixed(1));
+}
+// Speed assumptions: ~15 mph in city traffic → 1 mile ≈ 4 min
+function miToMin(miles: number): number {
+  return Math.max(2, Math.round(miles * 4));
+}
+
 const RESTAURANTS: Restaurant[] = [
-  { name: "McDonald's",  emoji: "🍔", color: "#DA291C", address: "Market Square, Nottingham",
-    fullAddress: "Market Square, Nottingham NG1 2GG",
+  { name: "McDonald's",  emoji: "🍔", color: "#DA291C",
+    address: "Market Square",       fullAddress: "Market Square, Nottingham NG1 2GG",
+    prepMin: 4, prepMax: 8,  mapX: 210, mapY: 230,
     menu: [{ name: "Big Mac Meal", price: 7.49 }, { name: "McFlurry", price: 2.19 }, { name: "McNuggets ×6", price: 4.39 }] },
-  { name: "Burger King", emoji: "👑", color: "#D62300", address: "Upper Parliament St",
-    fullAddress: "15 Upper Parliament St, Nottingham NG1 2AD",
+  { name: "Burger King", emoji: "👑", color: "#D62300",
+    address: "Upper Parliament St", fullAddress: "15 Upper Parliament St, Nottingham NG1 2AD",
+    prepMin: 5, prepMax: 9,  mapX: 240, mapY: 200,
     menu: [{ name: "Whopper Meal", price: 8.29 }, { name: "Chicken Royale", price: 6.49 }, { name: "Onion Rings", price: 2.49 }] },
-  { name: "KFC",         emoji: "🍗", color: "#E4002B", address: "Clumber Street",
-    fullAddress: "12 Clumber St, Nottingham NG1 3ED",
+  { name: "KFC",         emoji: "🍗", color: "#E4002B",
+    address: "Clumber Street",      fullAddress: "12 Clumber St, Nottingham NG1 3ED",
+    prepMin: 6, prepMax: 10, mapX: 275, mapY: 245,
     menu: [{ name: "Zinger Burger Meal", price: 7.99 }, { name: "Bucket for One", price: 9.49 }, { name: "Popcorn Chicken", price: 3.99 }] },
-  { name: "Pizza Hut",   emoji: "🍕", color: "#EE3124", address: "Victoria Centre",
-    fullAddress: "Victoria Centre, Nottingham NG1 3QN",
+  { name: "Pizza Hut",   emoji: "🍕", color: "#EE3124",
+    address: "Victoria Centre",     fullAddress: "Victoria Centre, Nottingham NG1 3QN",
+    prepMin: 15, prepMax: 22, mapX: 230, mapY: 170,
     menu: [{ name: "Pepperoni Passion (M)", price: 13.99 }, { name: "BBQ Chicken (M)", price: 13.49 }, { name: "Dough Balls ×8", price: 4.99 }] },
-  { name: "Nando's",     emoji: "🔥", color: "#C8102E", address: "Trinity Square",
-    fullAddress: "Trinity Square, Nottingham NG1 4AE",
+  { name: "Nando's",     emoji: "🔥", color: "#C8102E",
+    address: "Trinity Square",      fullAddress: "Trinity Square, Nottingham NG1 4AE",
+    prepMin: 12, prepMax: 18, mapX: 195, mapY: 255,
     menu: [{ name: "½ Chicken (Hot)", price: 9.75 }, { name: "Peri Peri Wrap", price: 8.25 }, { name: "Peri Fries", price: 3.75 }] },
-  { name: "Subway",      emoji: "🥖", color: "#009A44", address: "Derby Road",
-    fullAddress: "45 Derby Rd, Nottingham NG1 5FT",
+  { name: "Subway",      emoji: "🥖", color: "#009A44",
+    address: "Derby Road",          fullAddress: "45 Derby Rd, Nottingham NG1 5FT",
+    prepMin: 3, prepMax: 6,  mapX: 130, mapY: 220,
     menu: [{ name: "Footlong Meatball", price: 7.49 }, { name: "6\" BMT", price: 5.99 }, { name: "Veggie Delite", price: 5.49 }] },
-  { name: "Wagamama",    emoji: "🍜", color: "#A00000", address: "Cornerhouse",
-    fullAddress: "1 Burton St, Nottingham NG1 4DB",
+  { name: "Wagamama",    emoji: "🍜", color: "#A00000",
+    address: "Cornerhouse",         fullAddress: "1 Burton St, Nottingham NG1 4DB",
+    prepMin: 14, prepMax: 20, mapX: 260, mapY: 210,
     menu: [{ name: "Chicken Katsu Curry", price: 13.50 }, { name: "Ramen Noodle Bowl", price: 12.95 }, { name: "Gyoza ×6", price: 6.50 }] },
-  { name: "Greggs",      emoji: "🥐", color: "#0066CC", address: "Mansfield Road",
-    fullAddress: "88 Mansfield Rd, Nottingham NG1 3HL",
+  { name: "Greggs",      emoji: "🥐", color: "#0066CC",
+    address: "Mansfield Road",      fullAddress: "88 Mansfield Rd, Nottingham NG1 3HL",
+    prepMin: 2, prepMax: 5,  mapX: 300, mapY: 155,
     menu: [{ name: "Sausage Roll", price: 1.35 }, { name: "Steak Bake", price: 1.75 }, { name: "Latte", price: 1.75 }] },
-  { name: "Five Guys",   emoji: "🍟", color: "#CF2027", address: "Long Row West",
-    fullAddress: "20 Long Row W, Nottingham NG1 2EQ",
+  { name: "Five Guys",   emoji: "🍟", color: "#CF2027",
+    address: "Long Row West",       fullAddress: "20 Long Row W, Nottingham NG1 2EQ",
+    prepMin: 8, prepMax: 14, mapX: 250, mapY: 235,
     menu: [{ name: "Bacon Cheeseburger", price: 10.95 }, { name: "Little Fries", price: 3.75 }, { name: "Milkshake", price: 5.49 }] },
 ];
-const CUSTOMERS: Customer[] = [
-  { name: "James R.",  rating: 4.92, address: "42 Castle Blvd, NG7",   fullAddress: "42 Castle Blvd, Nottingham NG7 1FB",   orders: 347 },
-  { name: "Sophie M.", rating: 4.85, address: "17 Lenton Ave, NG7",    fullAddress: "17 Lenton Ave, Nottingham NG7 2EG",    orders: 182 },
-  { name: "Chris T.",  rating: 4.97, address: "8 Forest Rd West, NG7", fullAddress: "8 Forest Rd West, Nottingham NG7 4EQ", orders: 521 },
-  { name: "Priya K.",  rating: 4.78, address: "3 Meadows Way, NG2",    fullAddress: "3 Meadows Way, Nottingham NG2 2DS",    orders: 94  },
-  { name: "Daniel W.", rating: 4.88, address: "55 Gregory Blvd, NG7",  fullAddress: "55 Gregory Blvd, Nottingham NG7 5JE",  orders: 263 },
-  { name: "Emma L.",   rating: 4.95, address: "22 Wollaton Rd, NG8",   fullAddress: "22 Wollaton Rd, Nottingham NG8 2AA",   orders: 408 },
-];
-const TIPS = [0, 0, 0.5, 0.5, 1, 1, 1.5, 2, 2.5];
-const DURATIONS = ["4 min", "6 min", "8 min", "10 min", "12 min", "7 min", "9 min"];
-const DISTANCES = ["0.8 mi", "1.2 mi", "1.6 mi", "2.1 mi", "2.4 mi", "1.9 mi", "3.1 mi"];
 
-const RESTAURANT_MAP_POS: Record<string, { x: number; y: number }> = {
-  "McDonald's":  { x: 210, y: 230 },
-  "Burger King": { x: 240, y: 200 },
-  "KFC":         { x: 275, y: 245 },
-  "Pizza Hut":   { x: 230, y: 170 },
-  "Nando's":     { x: 195, y: 255 },
-  "Subway":      { x: 130, y: 220 },
-  "Wagamama":    { x: 260, y: 210 },
-  "Greggs":      { x: 300, y: 155 },
-  "Five Guys":   { x: 250, y: 235 },
-};
+const CUSTOMERS: Customer[] = [
+  { name: "James R.",  rating: 4.92, orders: 347, address: "42 Castle Blvd, NG7",   fullAddress: "42 Castle Blvd, Nottingham NG7 1FB",   mapX: 105, mapY: 300 },
+  { name: "Sophie M.", rating: 4.85, orders: 182, address: "17 Lenton Ave, NG7",    fullAddress: "17 Lenton Ave, Nottingham NG7 2EG",    mapX: 148, mapY: 260 },
+  { name: "Chris T.",  rating: 4.97, orders: 521, address: "8 Forest Rd West, NG7", fullAddress: "8 Forest Rd West, Nottingham NG7 4EQ", mapX: 88,  mapY: 205 },
+  { name: "Priya K.",  rating: 4.78, orders: 94,  address: "3 Meadows Way, NG2",    fullAddress: "3 Meadows Way, Nottingham NG2 2DS",    mapX: 225, mapY: 395 },
+  { name: "Daniel W.", rating: 4.88, orders: 263, address: "55 Gregory Blvd, NG7",  fullAddress: "55 Gregory Blvd, Nottingham NG7 5JE",  mapX: 133, mapY: 248 },
+  { name: "Emma L.",   rating: 4.95, orders: 408, address: "22 Wollaton Rd, NG8",   fullAddress: "22 Wollaton Rd, Nottingham NG8 2AA",   mapX: 72,  mapY: 238 },
+  { name: "Raj P.",    rating: 4.82, orders: 156, address: "10 Carlton Hill, NG4",   fullAddress: "10 Carlton Hill, Nottingham NG4 1EF",  mapX: 345, mapY: 215 },
+  { name: "Lisa K.",   rating: 4.90, orders: 312, address: "88 Sneinton Dale, NG2",  fullAddress: "88 Sneinton Dale, Nottingham NG2 4QN", mapX: 318, mapY: 280 },
+];
+
+// Fare formula: base + (dist_to_restaurant * rate) + (dist_to_customer * rate)
+const BASE_FARE    = 2.50;
+const RATE_PER_MI  = 0.90;
+const RANK_BONUS   = { Blue: 0, Gold: 0.05, Platinum: 0.10, Diamond: 0.15 };
+const TIPS         = [0, 0, 0, 0.5, 0.5, 1, 1, 1.5, 2, 2.5, 3];
+// Max matching radius in miles (lower rank = smaller radius = fewer choices)
+const MATCH_RADIUS = { Blue: 2.5, Gold: 3.2, Platinum: 3.8, Diamond: 4.5 };
 
 const STREETS = ["Market St", "Castle Blvd", "Lenton Ave", "Gregory Blvd", "Derby Rd", "Forest Rd", "Mansfield Rd", "Trent Bridge", "London Rd", "Alfreton Rd"];
 
@@ -97,22 +117,98 @@ function rand(min: number, max: number) { return Math.random() * (max - min) + m
 function fmt(n: number) { return `£${n.toFixed(2)}`; }
 let orderIdCounter = 0;
 
-function generateOrder(busyMultiplier: number): Order {
-  const restaurant = pick(RESTAURANTS);
+function getSurgeAt(x: number, y: number, busyZones: BusyZone[]): number {
+  for (const z of busyZones) {
+    if (pxDist(x, y, z.x, z.y) <= z.r) return z.multiplier;
+  }
+  return 1;
+}
+
+function generateRealisticOrder(
+  driverPos: { x: number; y: number },
+  restaurant: Restaurant,
+  busyZones: BusyZone[],
+  rankName: string,
+  acceptanceRate: number,
+): Order {
   const customer = pick(CUSTOMERS);
   const count = Math.floor(rand(1, 4));
   const items = [...restaurant.menu].sort(() => Math.random() - 0.5).slice(0, count);
-  const subtotal = items.reduce((s, i) => s + i.price, 0);
-  const tip = pick(TIPS);
-  const fare = parseFloat((subtotal * 0.35 * busyMultiplier + rand(1.5, 3.5)).toFixed(2));
-  const pos = RESTAURANT_MAP_POS[restaurant.name] ?? { x: rand(100, 340), y: rand(120, 380) };
+
+  const d2r = miDist(driverPos.x, driverPos.y, restaurant.mapX, restaurant.mapY);
+  const d2c = miDist(restaurant.mapX, restaurant.mapY, customer.mapX, customer.mapY);
+
+  const surge  = getSurgeAt(restaurant.mapX, restaurant.mapY, busyZones);
+  const bonus  = RANK_BONUS[rankName as keyof typeof RANK_BONUS] ?? 0;
+  // Acceptance rate penalty: below 80% starts reducing fare quality
+  const accPenalty = acceptanceRate < 80 ? 0.9 : acceptanceRate < 70 ? 0.8 : 1;
+
+  const raw  = BASE_FARE + d2r * RATE_PER_MI + d2c * RATE_PER_MI;
+  const fare = parseFloat((raw * surge * (1 + bonus) * accPenalty + rand(0, 0.5)).toFixed(2));
+  const tip  = pick(TIPS);
+
+  const totalMin = miToMin(d2r) + miToMin(d2c);
+  const totalMi  = parseFloat((d2r + d2c).toFixed(1));
+
+  const prepTime = Math.round(rand(restaurant.prepMin, restaurant.prepMax));
+  const inSurge  = surge > 1;
+  const highVal  = fare >= 7.50;
+
+  let matchReason: string;
+  if (rankName === "Diamond" || rankName === "Platinum") matchReason = "Priority match";
+  else if (inSurge)  matchReason = "Surge zone";
+  else if (highVal)  matchReason = "High fare";
+  else if (d2r < 1)  matchReason = "Near you";
+  else               matchReason = "Best match";
+
   return {
     id: String(++orderIdCounter),
-    restaurant, customer, items, total: fare, tip,
-    distance: pick(DISTANCES), duration: pick(DURATIONS),
-    mapX: Math.max(60, Math.min(380, pos.x + rand(-25, 25))),
-    mapY: Math.max(100, Math.min(400, pos.y + rand(-20, 20))),
+    restaurant, customer, items,
+    total: fare, tip,
+    distance: `${totalMi} mi`,
+    duration: `${totalMin} min`,
+    mapX: restaurant.mapX, mapY: restaurant.mapY,
+    distToRestaurant: d2r,
+    distToCustomer:   d2c,
+    prepTime,
+    surgeMultiplier: surge,
+    matchReason,
+    isHighValue: highVal,
   };
+}
+
+function generateOrderBatch(
+  driverPos: { x: number; y: number },
+  busyZones: BusyZone[],
+  rankName: string,
+  acceptanceRate: number,
+): Order[] {
+  const radius = MATCH_RADIUS[rankName as keyof typeof MATCH_RADIUS] ?? 2.5;
+
+  // Filter restaurants within matching radius
+  const eligible = RESTAURANTS.filter(r =>
+    miDist(driverPos.x, driverPos.y, r.mapX, r.mapY) <= radius
+  );
+  if (eligible.length === 0) return [generateRealisticOrder(driverPos, pick(RESTAURANTS), busyZones, rankName, acceptanceRate)];
+
+  // Sort: priority ranks get highest-fare restaurants first; others get closest first
+  const sorted = [...eligible].sort((a, b) => {
+    const da = miDist(driverPos.x, driverPos.y, a.mapX, a.mapY);
+    const db = miDist(driverPos.x, driverPos.y, b.mapX, b.mapY);
+    const surgeA = getSurgeAt(a.mapX, a.mapY, busyZones);
+    const surgeB = getSurgeAt(b.mapX, b.mapY, busyZones);
+    if (rankName === "Diamond" || rankName === "Platinum") {
+      return (surgeB * (1 / Math.max(db, 0.1))) - (surgeA * (1 / Math.max(da, 0.1)));
+    }
+    return da - db;
+  });
+
+  const isBusy = busyZones.length >= 2;
+  const maxCount = isBusy ? 3 : 2;
+  const count = Math.min(maxCount, sorted.length, Math.floor(rand(1, maxCount + 1)));
+  return sorted.slice(0, count).map(r =>
+    generateRealisticOrder(driverPos, r, busyZones, rankName, acceptanceRate)
+  );
 }
 
 // ─── BUSY ZONES ───────────────────────────────────────────────────────────────
@@ -772,6 +868,11 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
   const [cooldownInterval, setCooldownIntervalState] = useState<ReturnType<typeof setInterval> | null>(null);
   const [orderTimer, setOrderTimer] = useState(0);
   const ORDER_TIMEOUT = 15;
+  // Acceptance rate tracking
+  const [offeredCount, setOfferedCount] = useState<number>(saved.offeredCount ?? 0);
+  const [acceptedCount, setAcceptedCount] = useState<number>(saved.acceptedCount ?? 0);
+  const acceptanceRate = offeredCount > 0 ? Math.round((acceptedCount / offeredCount) * 100) : 100;
+  const accWarning = offeredCount >= 5 && acceptanceRate < 80;
 
   const isBusy = busyZones.length >= 2;
   const maxMultiplier = busyZones.length > 0 ? Math.max(...busyZones.map(z => z.multiplier)) : 1;
@@ -780,9 +881,11 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     const raw = localStorage.getItem(stateKey);
     const state = raw ? JSON.parse(raw) : {};
     state.totalEarnings = totalEarnings;
-    state.tripCount = tripCount;
+    state.tripCount     = tripCount;
+    state.offeredCount  = offeredCount;
+    state.acceptedCount = acceptedCount;
     localStorage.setItem(stateKey, JSON.stringify(state));
-  }, [totalEarnings, tripCount]);
+  }, [totalEarnings, tripCount, offeredCount, acceptedCount]);
 
   useEffect(() => {
     if (phase === "offline") {
@@ -843,13 +946,14 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
 
   const spawnOrders = useCallback(() => {
     if (phaseRef.current !== "online") return;
-    const count = isBusy ? Math.floor(rand(2, 4)) : Math.floor(rand(1, 3));
-    const orders = Array.from({ length: count }, () => generateOrder(maxMultiplier));
+    const rankName = getRank(tripCount).name;
+    const orders = generateOrderBatch(DRIVER_HOME, busyZones, rankName, acceptanceRate);
+    setOfferedCount(c => c + orders.length);
     setAvailableOrders(orders);
     phaseRef.current = "selecting";
     setPhase("selecting");
     playNewOrder();
-  }, [isBusy, maxMultiplier]);
+  }, [busyZones, tripCount, acceptanceRate]);
 
   const scheduleNextOrders = useCallback(() => {
     if (cooldownInterval) clearInterval(cooldownInterval);
@@ -882,6 +986,7 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
 
   function handleAcceptOrder(order: Order) {
     if (orderTimerRef.current) clearInterval(orderTimerRef.current);
+    setAcceptedCount(c => c + 1);
     setSelectedOrderCard(null);
     setAvailableOrders([]);
     setActiveOrder(order);
@@ -1076,10 +1181,28 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
                   Pause
                 </button>
               </div>
+              {/* Acceptance rate warning */}
+              {accWarning && (
+                <div style={{ margin: "0 16px 10px", background: acceptanceRate < 70 ? "#FFF0F0" : "#FFFBF0", border: `1px solid ${acceptanceRate < 70 ? "#FFCDD2" : "#FFE082"}`, borderRadius: 10, padding: "8px 12px", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 15 }}>{acceptanceRate < 70 ? "⚠️" : "📉"}</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: 12, color: acceptanceRate < 70 ? "#C62828" : "#E65100" }}>
+                      {acceptanceRate < 70 ? "Low acceptance rate — order quality reduced" : "Acceptance rate below 80%"}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#aaa", marginTop: 1 }}>Accept more orders to improve your score</div>
+                  </div>
+                  <div style={{ fontWeight: 900, fontSize: 14, color: acceptanceRate < 70 ? "#C62828" : "#E65100" }}>{acceptanceRate}%</div>
+                </div>
+              )}
               <div style={{ display: "flex", gap: 0, paddingBottom: 16, paddingLeft: 16, paddingRight: 16, borderTop: "1px solid #f5f5f5" }}>
-                {[{v:String(tripCount),l:"Trips"},{v:fmt(totalEarnings),l:"Earned"},{v:fmtTime(sessionTime),l:"Online"},{v:`${rank.icon} ${rank.name}`,l:"Pro Status"}].map((s,i) => (
+                {[
+                  { v: String(tripCount),        l: "Trips" },
+                  { v: fmt(totalEarnings),        l: "Earned" },
+                  { v: fmtTime(sessionTime),      l: "Online" },
+                  { v: `${acceptanceRate}%`,      l: "Acceptance" },
+                ].map((s, i) => (
                   <div key={i} style={{ flex: 1, textAlign: "center", paddingTop: 10 }}>
-                    <div style={{ fontWeight: 800, fontSize: 13, color: i === 1 ? "#06C167" : "#1a1a1a" }}>{s.v}</div>
+                    <div style={{ fontWeight: 800, fontSize: 13, color: i === 1 ? "#06C167" : i === 3 ? (acceptanceRate < 80 ? "#E65100" : "#1a1a1a") : "#1a1a1a" }}>{s.v}</div>
                     <div style={{ fontSize: 9.5, color: "#bbb", marginTop: 2 }}>{s.l}</div>
                   </div>
                 ))}
@@ -1090,22 +1213,34 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
           {/* ── ORDER CARDS (selecting — small tap cards) ── */}
           {phase === "selecting" && availableOrders.length > 0 && !selectedOrderCard && (
             <div style={{ position: "absolute", bottom: 12, left: 12, right: 12, zIndex: 20, animation: "slideUp 0.25s ease" }}>
-              <div style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)", borderRadius: 14, padding: "10px 14px", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <span style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>{availableOrders.length} order{availableOrders.length !== 1 ? "s" : ""} nearby</span>
+              <div style={{ background: "rgba(0,0,0,0.72)", backdropFilter: "blur(6px)", borderRadius: 14, padding: "10px 14px", marginBottom: 10, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <span style={{ color: "#fff", fontWeight: 700, fontSize: 13 }}>{availableOrders.length} order{availableOrders.length !== 1 ? "s" : ""} matched</span>
+                  <span style={{ color: "rgba(255,255,255,0.4)", fontSize: 11, marginLeft: 8 }}>Acceptance: {acceptanceRate}%</span>
+                </div>
                 <CountdownRing seconds={orderTimer} total={ORDER_TIMEOUT} />
               </div>
               <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 4 }}>
                 {availableOrders.map(o => (
-                  <div key={o.id} onClick={() => setSelectedOrderCard(o)} style={{ background: "white", borderRadius: 18, padding: "14px 16px", minWidth: 175, flexShrink: 0, boxShadow: "0 6px 24px rgba(0,0,0,0.25)", cursor: "pointer" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 10, background: o.restaurant.color + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>{o.restaurant.emoji}</div>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 12, color: "#1a1a1a" }}>{o.restaurant.name}</div>
-                        <div style={{ fontSize: 11, color: "#aaa" }}>{o.duration} · {o.distance}</div>
+                  <div key={o.id} onClick={() => setSelectedOrderCard(o)}
+                    style={{ background: "white", borderRadius: 18, padding: "14px 16px", minWidth: 185, flexShrink: 0, boxShadow: "0 6px 24px rgba(0,0,0,0.25)", cursor: "pointer", border: o.isHighValue ? "2px solid #06C167" : "2px solid transparent" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <div style={{ width: 34, height: 34, borderRadius: 10, background: o.restaurant.color + "18", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17 }}>{o.restaurant.emoji}</div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 12, color: "#1a1a1a" }}>{o.restaurant.name}</div>
+                          <div style={{ fontSize: 10, color: "#aaa" }}>{o.distToRestaurant} mi away</div>
+                        </div>
                       </div>
+                      {o.surgeMultiplier > 1 && <span style={{ fontSize: 9, fontWeight: 800, color: "#FF6D00", background: "#FFF3E0", borderRadius: 6, padding: "2px 5px" }}>⚡{o.surgeMultiplier.toFixed(1)}×</span>}
                     </div>
-                    <div style={{ fontWeight: 900, fontSize: 22, color: "#06C167" }}>{fmt(o.total)}</div>
-                    <div style={{ fontSize: 11, color: "#bbb", marginTop: 2 }}>{o.items.length} item{o.items.length !== 1 ? "s" : ""}</div>
+                    <div style={{ fontWeight: 900, fontSize: 22, color: "#06C167", marginBottom: 2 }}>{fmt(o.total)}</div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 10, color: "#bbb" }}>{o.duration} total</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: o.matchReason === "Priority match" ? "#6A1B9A" : o.matchReason === "High fare" ? "#06C167" : o.matchReason === "Surge zone" ? "#FF6D00" : "#1a73e8",
+                        background: o.matchReason === "Priority match" ? "#F3E5F5" : o.matchReason === "High fare" ? "#E8F5E9" : o.matchReason === "Surge zone" ? "#FFF3E0" : "#E3F2FD",
+                        borderRadius: 6, padding: "2px 6px" }}>{o.matchReason}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1145,15 +1280,34 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
                   <div style={{ fontWeight: 900, fontSize: 42, color: "#1a1a1a", letterSpacing: "-2px", lineHeight: 1, marginBottom: 5 }}>
                     {fmt(selectedOrderCard.total)}
                   </div>
-                  <div style={{ color: "#888", fontSize: 13, marginBottom: 18, fontWeight: 400 }}>
+                  <div style={{ color: "#888", fontSize: 13, marginBottom: 14, fontWeight: 400 }}>
                     includes expected tip
+                  </div>
+
+                  {/* ── Match reason + surge ── */}
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+                    <span style={{
+                      fontSize: 11, fontWeight: 700, borderRadius: 8, padding: "4px 10px",
+                      color: selectedOrderCard.matchReason === "Priority match" ? "#6A1B9A" : selectedOrderCard.matchReason === "High fare" ? "#2E7D32" : selectedOrderCard.matchReason === "Surge zone" ? "#E65100" : "#1565C0",
+                      background: selectedOrderCard.matchReason === "Priority match" ? "#F3E5F5" : selectedOrderCard.matchReason === "High fare" ? "#E8F5E9" : selectedOrderCard.matchReason === "Surge zone" ? "#FFF3E0" : "#E3F2FD",
+                    }}>{selectedOrderCard.matchReason}</span>
+                    {selectedOrderCard.surgeMultiplier > 1 && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#E65100", background: "#FFF3E0", borderRadius: 8, padding: "4px 10px" }}>
+                        ⚡ {selectedOrderCard.surgeMultiplier.toFixed(1)}× surge
+                      </span>
+                    )}
+                    {selectedOrderCard.isHighValue && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: "#2E7D32", background: "#E8F5E9", borderRadius: 8, padding: "4px 10px" }}>
+                        💰 High value
+                      </span>
+                    )}
                   </div>
 
                   {/* ── Separator ── */}
                   <div style={{ height: 1, background: "#ebebeb", marginBottom: 16 }} />
 
                   {/* ── Time + distance ── */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 16 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 12 }}>
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
                       <circle cx="12" cy="12" r="10" stroke="#555" strokeWidth="2"/>
                       <path d="M12 6v6l4 2" stroke="#555" strokeWidth="2" strokeLinecap="round"/>
@@ -1163,20 +1317,37 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
                     </span>
                   </div>
 
+                  {/* ── Pickup distance + prep time ── */}
+                  <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+                    <div style={{ flex: 1, background: "#f8f8f8", borderRadius: 10, padding: "9px 12px" }}>
+                      <div style={{ fontSize: 10, color: "#aaa", fontWeight: 600, marginBottom: 3 }}>PICKUP</div>
+                      <div style={{ fontWeight: 800, fontSize: 15, color: "#1a1a1a" }}>{selectedOrderCard.distToRestaurant} mi</div>
+                      <div style={{ fontSize: 11, color: "#888" }}>{miToMin(selectedOrderCard.distToRestaurant)} min drive</div>
+                    </div>
+                    <div style={{ flex: 1, background: "#f8f8f8", borderRadius: 10, padding: "9px 12px" }}>
+                      <div style={{ fontSize: 10, color: "#aaa", fontWeight: 600, marginBottom: 3 }}>DROPOFF</div>
+                      <div style={{ fontWeight: 800, fontSize: 15, color: "#1a1a1a" }}>{selectedOrderCard.distToCustomer} mi</div>
+                      <div style={{ fontSize: 11, color: "#888" }}>{miToMin(selectedOrderCard.distToCustomer)} min drive</div>
+                    </div>
+                    <div style={{ flex: 1, background: "#f8f8f8", borderRadius: 10, padding: "9px 12px" }}>
+                      <div style={{ fontSize: 10, color: "#aaa", fontWeight: 600, marginBottom: 3 }}>PREP TIME</div>
+                      <div style={{ fontWeight: 800, fontSize: 15, color: "#1a1a1a" }}>~{selectedOrderCard.prepTime} min</div>
+                      <div style={{ fontSize: 11, color: "#888" }}>at restaurant</div>
+                    </div>
+                  </div>
+
                   {/* ── Pickup address ── */}
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 13 }}>
-                    {/* Fork icon — SVG */}
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
                       <path d="M3 2v7c0 1.1.9 2 2 2h2v11h2V11h2c1.1 0 2-.9 2-2V2h-2v5H7V2H5v5H3V2zM19 2c-1.7 0-4 1.3-4 6v1.5c0 1 .8 1.8 1.8 1.8H18V22h2V2z" fill="#555"/>
                     </svg>
                     <span style={{ color: "#1a1a1a", fontSize: 14, fontWeight: 500, lineHeight: 1.4 }}>
-                      {selectedOrderCard.restaurant.name} {selectedOrderCard.restaurant.fullAddress}
+                      {selectedOrderCard.restaurant.name} · {selectedOrderCard.restaurant.fullAddress}
                     </span>
                   </div>
 
                   {/* ── Dropoff address ── */}
                   <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 22 }}>
-                    {/* Pin dot — SVG */}
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 2 }}>
                       <circle cx="12" cy="10" r="4" fill="#555"/>
                       <path d="M12 2C7.6 2 4 5.6 4 10c0 5.3 8 14 8 14s8-8.7 8-14c0-4.4-3.6-8-8-8z" stroke="#555" strokeWidth="1.5" fill="none"/>

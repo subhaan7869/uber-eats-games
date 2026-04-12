@@ -887,6 +887,15 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     localStorage.setItem(stateKey, JSON.stringify(state));
   }, [totalEarnings, tripCount, offeredCount, acceptedCount]);
 
+  // ── Wake Lock (prevent screen sleep while driving) ──
+  useEffect(() => {
+    let wakeLock: WakeLockSentinel | null = null;
+    if (phase !== "offline" && "wakeLock" in navigator) {
+      (navigator.wakeLock as WakeLock).request("screen").then(wl => { wakeLock = wl; }).catch(() => {});
+    }
+    return () => { wakeLock?.release().catch(() => {}); };
+  }, [phase !== "offline"]);
+
   useEffect(() => {
     if (phase === "offline") {
       if (sessionTimerRef.current) { clearInterval(sessionTimerRef.current); sessionTimerRef.current = null; }
@@ -1047,7 +1056,10 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
 
   function handleNextAfterDelivery() {
     setActiveOrder(null);
-    scheduleNextOrders();
+    phaseRef.current = "online";
+    setPhase("online");
+    const cooldownSecs = Math.floor(rand(5, 9));
+    startCooldown(cooldownSecs, () => { if (phaseRef.current === "online") spawnOrders(); });
   }
 
   const handleCashOut = useCallback(() => {

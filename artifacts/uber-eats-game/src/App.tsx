@@ -19,7 +19,15 @@ export default function App() {
   useEffect(() => {
     const saved = localStorage.getItem(PROFILE_KEY);
     if (saved) {
-      try { setProfile(JSON.parse(saved)); } catch { localStorage.removeItem(PROFILE_KEY); }
+      try {
+        const p = JSON.parse(saved);
+        if (!p.email) {
+          localStorage.removeItem(PROFILE_KEY);
+          localStorage.removeItem(STATE_KEY);
+        } else {
+          setProfile(p);
+        }
+      } catch { localStorage.removeItem(PROFILE_KEY); }
     }
     setLoaded(true);
   }, []);
@@ -39,8 +47,11 @@ export default function App() {
     setLoggedIn(true);
   };
 
-  const handleLogin = (code: string): boolean => {
-    if (!profile || code !== profile.driverCode) return false;
+  const handleLogin = (email: string, password: string): boolean => {
+    if (!profile) return false;
+    const emailMatch = email.toLowerCase() === (profile.email ?? "").toLowerCase();
+    const passMatch  = password === profile.password;
+    if (!emailMatch || !passMatch) return false;
     const stateRaw = localStorage.getItem(STATE_KEY);
     const state = stateRaw ? JSON.parse(stateRaw) : { totalEarnings: 0, tripCount: 0, loginCount: 0 };
     state.loginCount = (state.loginCount ?? 0) + 1;

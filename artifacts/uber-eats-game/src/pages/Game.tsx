@@ -182,6 +182,7 @@ function generateOrderBatch(
   busyZones: BusyZone[],
   rankName: string,
   acceptanceRate: number,
+  maxJobsAllowed: number = 3,
 ): Order[] {
   const radius = MATCH_RADIUS[rankName as keyof typeof MATCH_RADIUS] ?? 2.5;
 
@@ -203,9 +204,14 @@ function generateOrderBatch(
     return da - db;
   });
 
+  const isPriorityRank = rankName === "Diamond" || rankName === "Platinum";
   const isBusy = busyZones.length >= 2;
-  const maxCount = isBusy ? 3 : 2;
-  const count = Math.min(maxCount, sorted.length, Math.floor(rand(1, maxCount + 1)));
+
+  // For priority ranks: 1-3 jobs based on busyness, for normal ranks: always 1 job
+  const maxCount = isPriorityRank ? Math.min(3, maxJobsAllowed) : Math.min(1, maxJobsAllowed);
+  const minCount = isPriorityRank ? 1 : 1;
+  const count = Math.min(maxCount, sorted.length, Math.floor(rand(minCount, maxCount + 1)));
+
   return sorted.slice(0, count).map(r =>
     generateRealisticOrder(driverPos, r, busyZones, rankName, acceptanceRate)
   );
@@ -231,8 +237,68 @@ function pickBusyZones(): BusyZone[] {
 function CityMap({ busyZones, orders, driverPhase, onOrderTap, showDriverArrow }: {
   busyZones: BusyZone[]; orders: Order[]; driverPhase: Phase; onOrderTap: (o: Order) => void; showDriverArrow?: boolean;
 }) {
+  const [scale, setScale] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.preventDefault();
+    const newScale = Math.max(0.5, Math.min(3, scale + (e.deltaY > 0 ? -0.1 : 0.1)));
+    setScale(newScale);
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    setIsDragging(true);
+    setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    setIsDragging(true);
+    setDragStart({ x: touch.clientX - pan.x, y: touch.clientY - pan.y });
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const touch = e.touches[0];
+    setPan({ x: touch.clientX - dragStart.x, y: touch.clientY - dragStart.y });
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+  };
+
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
+    <div
+      ref={containerRef}
+      style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden", cursor: isDragging ? "grabbing" : "grab" }}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      <div style={{
+        transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+        transformOrigin: "center center",
+        width: "100%",
+        height: "100%",
+        transition: isDragging ? "none" : "transform 0.1s ease-out"
+      }}>
       <svg width="100%" height="100%" viewBox="0 0 440 520" preserveAspectRatio="xMidYMid slice"
            style={{ position: "absolute", inset: 0, display: "block" }}>
 
@@ -361,6 +427,13 @@ function CityMap({ busyZones, orders, driverPhase, onOrderTap, showDriverArrow }
         )}
 
       </svg>
+      </div>
+      {/* Map controls */}
+      <div style={{ position: "absolute", bottom: 16, right: 16, display: "flex", flexDirection: "column", gap: 8, zIndex: 50 }}>
+        <button onClick={() => setScale((s: number) => Math.min(3, s + 0.2))} style={{ width: 36, height: 36, borderRadius: "50%", background: "white", border: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.2)", fontSize: 20, cursor: "pointer" }}>+</button>
+        <button onClick={() => setScale((s: number) => Math.max(0.5, s - 0.2))} style={{ width: 36, height: 36, borderRadius: "50%", background: "white", border: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.2)", fontSize: 20, cursor: "pointer" }}>−</button>
+        <button onClick={() => { setScale(1); setPan({ x: 0, y: 0 }); }} style={{ width: 36, height: 36, borderRadius: "50%", background: "white", border: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.2)", fontSize: 14, cursor: "pointer" }}>⌖</button>
+      </div>
     </div>
   );
 }
@@ -439,8 +512,8 @@ function NavHeader({ phase, order }: { phase: Phase; order: Order | null }) {
 
 type MenuPage = null | "earnings" | "wallet" | "account" | "rank";
 
-function SideMenu({ isOpen, profile, earnings, tripCount, onClose, onUpdateProfile, onCashOut, stateKey }: {
-  isOpen: boolean; profile: DriverProfile; earnings: number; tripCount: number;
+function SideMenu({ isOpen, profile, earnings, todayEarnings, tripCount, onClose, onUpdateProfile, onCashOut, stateKey }: {
+  isOpen: boolean; profile: DriverProfile; earnings: number; todayEarnings: number; tripCount: number;
   onClose: () => void; onUpdateProfile: (p: DriverProfile) => void;
   onCashOut: () => void; stateKey: string;
 }) {
@@ -539,10 +612,14 @@ function SideMenu({ isOpen, profile, earnings, tripCount, onClose, onUpdateProfi
             <div style={{ padding: "20px" }}>
               <button onClick={() => setPage(null)} style={{ background: "none", border: "none", color: "#666", fontSize: 14, cursor: "pointer", marginBottom: 16, padding: 0 }}>← Back</button>
               <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 20 }}>Earnings</div>
-              <div style={{ background: "#f8f8f8", borderRadius: 16, padding: "20px", marginBottom: 14, textAlign: "center" }}>
-                <div style={{ color: "#888", fontSize: 12, marginBottom: 4 }}>Total Earned</div>
+              <div style={{ background: "#f8f8f8", borderRadius: 16, padding: "20px", marginBottom: 10, textAlign: "center" }}>
+                <div style={{ color: "#888", fontSize: 12, marginBottom: 4 }}>Available to Cash Out</div>
                 <div style={{ color: "#06C167", fontWeight: 900, fontSize: 36 }}>{fmt(earnings)}</div>
-                <div style={{ color: "#bbb", fontSize: 12, marginTop: 4 }}>{tripCount} deliveries</div>
+              </div>
+              <div style={{ background: "#f8f8f8", borderRadius: 16, padding: "16px", marginBottom: 14, textAlign: "center" }}>
+                <div style={{ color: "#888", fontSize: 11, marginBottom: 2 }}>Earned Today (resets at midnight)</div>
+                <div style={{ color: "#555", fontWeight: 700, fontSize: 20 }}>{fmt(todayEarnings)}</div>
+                <div style={{ color: "#bbb", fontSize: 11, marginTop: 2 }}>{tripCount} deliveries</div>
               </div>
               <button onClick={() => { onCashOut(); setPage(null); }} disabled={earnings <= 0} style={{ width: "100%", background: earnings > 0 ? "#06C167" : "#f0f0f0", border: "none", borderRadius: 100, color: earnings > 0 ? "#fff" : "#bbb", fontWeight: 800, fontSize: 16, padding: "16px", cursor: earnings > 0 ? "pointer" : "default" }}>
                 Cash Out {earnings > 0 ? fmt(earnings) : ""}
@@ -676,7 +753,7 @@ function VerificationModal({ profile, onSuccess, onFail }: {
           <>
             <div style={{ width: 52, height: 52, borderRadius: 14, background: "rgba(255,255,255,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 16px" }}>🔒</div>
             <div style={{ color: "#fff", fontWeight: 800, fontSize: 20, textAlign: "center", marginBottom: 5 }}>Identity Check</div>
-            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, textAlign: "center", marginBottom: 22 }}>Enter your driver code to continue</div>
+            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, textAlign: "center", marginBottom: 22 }}>Face verification required to continue</div>
             <input autoFocus value={input} onChange={e => { setInput(e.target.value.toUpperCase()); setError(""); }}
               placeholder="DRV-000000" onKeyDown={e => e.key === "Enter" && input.trim() && handleVerify()}
               style={{ width: "100%", boxSizing: "border-box", background: "#1a1a1a", border: error ? "2px solid #FF3B30" : "2px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "16px", color: "#fff", fontSize: 18, fontWeight: 700, caretColor: "#06C167", fontFamily: "monospace", letterSpacing: "0.08em" }} />
@@ -687,7 +764,7 @@ function VerificationModal({ profile, onSuccess, onFail }: {
             </button>
             <button onClick={() => setShowForgot(true)}
               style={{ width: "100%", marginTop: 10, background: "none", border: "none", color: "#06C167", fontWeight: 600, fontSize: 14, padding: "8px", cursor: "pointer" }}>
-              Forgot your driver code?
+              Can't verify your face?
             </button>
           </>
         )}
@@ -700,8 +777,8 @@ function VerificationModal({ profile, onSuccess, onFail }: {
               ← Back
             </button>
             <div style={{ width: 52, height: 52, borderRadius: 14, background: "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 14px" }}>🔑</div>
-            <div style={{ color: "#fff", fontWeight: 800, fontSize: 18, textAlign: "center", marginBottom: 5 }}>Reset Driver Code</div>
-            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, textAlign: "center", marginBottom: 20 }}>Verify your identity to recover your code</div>
+            <div style={{ color: "#fff", fontWeight: 800, fontSize: 18, textAlign: "center", marginBottom: 5 }}>Face Verification Help</div>
+            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, textAlign: "center", marginBottom: 20 }}>Verify your identity to continue</div>
             <div style={{ marginBottom: 12 }}>
               <label style={{ color: "rgba(255,255,255,0.3)", fontSize: 11, fontWeight: 700, letterSpacing: "0.5px", textTransform: "uppercase", display: "block", marginBottom: 6 }}>Full Name</label>
               <input autoFocus value={forgotName} onChange={e => { setForgotName(e.target.value); setForgotErr(""); }}
@@ -728,7 +805,7 @@ function VerificationModal({ profile, onSuccess, onFail }: {
           <>
             <div style={{ width: 52, height: 52, borderRadius: 14, background: "#06C16720", border: "1px solid #06C16740", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 14px" }}>✅</div>
             <div style={{ color: "#fff", fontWeight: 800, fontSize: 18, textAlign: "center", marginBottom: 5 }}>Identity Verified</div>
-            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, textAlign: "center", marginBottom: 20 }}>Here is your driver code</div>
+            <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 13, textAlign: "center", marginBottom: 20 }}>Verification code for backup</div>
             <div style={{ background: "#1a1a1a", borderRadius: 14, padding: "20px", textAlign: "center", border: "2px solid #06C16750", fontFamily: "monospace", fontSize: 26, fontWeight: 900, color: "#06C167", letterSpacing: "0.1em", marginBottom: 14 }}>
               {shownCode}
             </div>
@@ -749,34 +826,303 @@ function VerificationModal({ profile, onSuccess, onFail }: {
 
 // ─── Bottom Panels ────────────────────────────────────────────────────────────
 
-function PickupPanel({ order, onPickedUp }: { order: Order; onPickedUp: () => void }) {
+interface ChatMessage {
+  id: string;
+  sender: 'driver' | 'customer';
+  text: string;
+  timestamp: number;
+  read?: boolean;
+}
+
+function ChatPanel({ customerName, messages, onSendMessage, isOpen, onToggle }: {
+  customerName: string;
+  messages: ChatMessage[];
+  onSendMessage: (text: string) => void;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  const [input, setInput] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isOpen]);
+
+  if (!isOpen) {
+    return (
+      <button onClick={onToggle} style={{
+        position: "fixed",
+        bottom: 100,
+        right: 16,
+        width: 56,
+        height: 56,
+        borderRadius: "50%",
+        background: "#06C167",
+        border: "none",
+        boxShadow: "0 4px 16px rgba(6,193,103,0.4)",
+        color: "white",
+        fontSize: 24,
+        cursor: "pointer",
+        zIndex: 200,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }}>
+        💬
+        {messages.filter(m => m.sender === 'customer' && !m.read).length > 0 && (
+          <span style={{
+            position: "absolute",
+            top: -2,
+            right: -2,
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            background: "#FF3B30",
+            color: "white",
+            fontSize: 12,
+            fontWeight: 700,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}>
+            {messages.filter(m => m.sender === 'customer' && !m.read).length}
+          </span>
+        )}
+      </button>
+    );
+  }
+
   return (
-    <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", boxShadow: "0 -4px 24px rgba(0,0,0,0.15)", animation: "slideUp 0.22s ease" }}>
-      <div style={{ width: 36, height: 4, background: "#e0e0e0", borderRadius: 2, margin: "12px auto 16px" }} />
-      <div style={{ padding: "0 20px 28px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
-          <div style={{ width: 50, height: 50, borderRadius: 14, background: order.restaurant.color + "18", border: `1.5px solid ${order.restaurant.color}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
-            {order.restaurant.emoji}
+    <div style={{
+      position: "fixed",
+      bottom: 100,
+      right: 16,
+      width: 320,
+      maxHeight: 400,
+      background: "white",
+      borderRadius: 20,
+      boxShadow: "0 8px 32px rgba(0,0,0,0.2)",
+      zIndex: 200,
+      display: "flex",
+      flexDirection: "column",
+      overflow: "hidden"
+    }}>
+      {/* Header */}
+      <div style={{
+        background: "#06C167",
+        padding: "12px 16px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>
+            👤
           </div>
           <div>
-            <div style={{ color: "#06C167", fontWeight: 800, fontSize: 17 }}>You've arrived!</div>
-            <div style={{ color: "#888", fontSize: 13, marginTop: 2 }}>{order.restaurant.name}</div>
-            <div style={{ color: "#bbb", fontSize: 11, marginTop: 1 }}>{order.restaurant.fullAddress}</div>
+            <div style={{ color: "white", fontWeight: 700, fontSize: 14 }}>{customerName}</div>
+            <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 11 }}>Customer</div>
           </div>
         </div>
-        <div style={{ background: "#f8f8f8", borderRadius: 14, padding: "12px 14px", marginBottom: 16 }}>
-          {order.items.map((item, i) => (
-            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: i < order.items.length - 1 ? "1px solid #efefef" : "none" }}>
-              <span style={{ color: "#444", fontSize: 13 }}>{item.name}</span>
-              <span style={{ color: "#aaa", fontSize: 12 }}>{fmt(item.price)}</span>
+        <button onClick={onToggle} style={{ background: "none", border: "none", color: "white", fontSize: 20, cursor: "pointer" }}>×</button>
+      </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} style={{ flex: 1, padding: 12, overflowY: "auto", maxHeight: 250 }}>
+        {messages.length === 0 ? (
+          <div style={{ textAlign: "center", color: "#999", fontSize: 13, padding: "20px 0" }}>
+            No messages yet.<br/>Say hello to your customer!
+          </div>
+        ) : (
+          messages.map((msg) => (
+            <div key={msg.id} style={{
+              display: "flex",
+              justifyContent: msg.sender === 'driver' ? 'flex-end' : 'flex-start',
+              marginBottom: 8
+            }}>
+              <div style={{
+                maxWidth: "75%",
+                padding: "8px 12px",
+                borderRadius: 14,
+                background: msg.sender === 'driver' ? "#06C167" : "#f0f0f0",
+                color: msg.sender === 'driver' ? "white" : "#333",
+                fontSize: 13,
+                wordBreak: "break-word"
+              }}>
+                {msg.text}
+              </div>
             </div>
-          ))}
-        </div>
-        <button className="ubtn" onClick={onPickedUp} style={{ width: "100%", background: "#06C167", border: "none", borderRadius: 100, color: "#fff", fontWeight: 800, fontSize: 16, padding: "17px" }}>
-          Picked Up · Start Delivery
+          ))
+        )}
+      </div>
+
+      {/* Input */}
+      <div style={{ padding: "8px 12px 12px", borderTop: "1px solid #eee", display: "flex", gap: 8 }}>
+        <input
+          value={input}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
+          onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter' && input.trim()) { onSendMessage(input); setInput(""); }}}
+          placeholder="Type a message..."
+          style={{
+            flex: 1,
+            border: "1px solid #ddd",
+            borderRadius: 20,
+            padding: "8px 14px",
+            fontSize: 14,
+            outline: "none"
+          }}
+        />
+        <button
+          onClick={() => { if (input.trim()) { onSendMessage(input); setInput(""); }}}
+          disabled={!input.trim()}
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: "50%",
+            background: input.trim() ? "#06C167" : "#ddd",
+            border: "none",
+            color: "white",
+            cursor: input.trim() ? "pointer" : "default",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          ➤
         </button>
       </div>
     </div>
+  );
+}
+
+function PickupPanel({ order, onPickedUp, waitTimeLeft, isWaiting }: { order: Order; onPickedUp: () => void; waitTimeLeft: number; isWaiting: boolean }) {
+  const [showChat, setShowChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+
+  // Auto-send customer message if waiting
+  useEffect(() => {
+    if (isWaiting && chatMessages.length === 0) {
+      const timer = setTimeout(() => {
+        setChatMessages((prev: ChatMessage[]) => [...prev, {
+          id: Date.now().toString(),
+          sender: 'customer',
+          text: "Hi! The restaurant said it'll be just a few more minutes. Thanks for waiting!",
+          timestamp: Date.now(),
+          read: false
+        }]);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [isWaiting, chatMessages.length]);
+
+  const handleSendMessage = (text: string) => {
+    setChatMessages((prev: ChatMessage[]) => [...prev, {
+      id: Date.now().toString(),
+      sender: 'driver',
+      text,
+      timestamp: Date.now()
+    }]);
+    // Auto-reply from customer sometimes
+    if (Math.random() > 0.5) {
+      setTimeout(() => {
+        const replies = [
+          "Thanks for the update!",
+          "No problem, take your time.",
+          "Appreciate you letting me know!",
+          "I'm ready whenever you are!",
+          "Great, thanks!"
+        ];
+        setChatMessages((prev: ChatMessage[]) => [...prev, {
+          id: Date.now().toString(),
+          sender: 'customer',
+          text: pick(replies),
+          timestamp: Date.now(),
+          read: false
+        }]);
+      }, 2000 + Math.random() * 3000);
+    }
+  };
+
+  const formatWaitTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <>
+      <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", boxShadow: "0 -4px 24px rgba(0,0,0,0.15)", animation: "slideUp 0.22s ease" }}>
+        <div style={{ width: 36, height: 4, background: "#e0e0e0", borderRadius: 2, margin: "12px auto 16px" }} />
+        <div style={{ padding: "0 20px 28px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+            <div style={{ width: 50, height: 50, borderRadius: 14, background: order.restaurant.color + "18", border: `1.5px solid ${order.restaurant.color}55`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>
+              {order.restaurant.emoji}
+            </div>
+            <div>
+              <div style={{ color: "#06C167", fontWeight: 800, fontSize: 17 }}>You've arrived!</div>
+              <div style={{ color: "#888", fontSize: 13, marginTop: 2 }}>{order.restaurant.name}</div>
+              <div style={{ color: "#bbb", fontSize: 11, marginTop: 1 }}>{order.restaurant.fullAddress}</div>
+            </div>
+          </div>
+
+          {/* Waiting timer */}
+          {isWaiting && (
+            <div style={{ background: "#FFF8E1", borderRadius: 14, padding: "16px", marginBottom: 16, border: "1px solid #FFE082" }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{ fontSize: 20 }}>⏱️</span>
+                <span style={{ color: "#F57F17", fontWeight: 800, fontSize: 18 }}>Waiting for order...</span>
+              </div>
+              <div style={{ textAlign: "center", color: "#F9A825", fontSize: 24, fontWeight: 900, fontFamily: "monospace" }}>
+                {formatWaitTime(waitTimeLeft)}
+              </div>
+              <div style={{ textAlign: "center", color: "#999", fontSize: 11, marginTop: 4 }}>
+                Restaurant is still preparing your order
+              </div>
+            </div>
+          )}
+
+          <div style={{ background: "#f8f8f8", borderRadius: 14, padding: "12px 14px", marginBottom: 16 }}>
+            {order.items.map((item, i) => (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: i < order.items.length - 1 ? "1px solid #efefef" : "none" }}>
+                <span style={{ color: "#444", fontSize: 13 }}>{item.name}</span>
+                <span style={{ color: "#aaa", fontSize: 12 }}>{fmt(item.price)}</span>
+              </div>
+            ))}
+          </div>
+
+          <button
+            className="ubtn"
+            onClick={onPickedUp}
+            disabled={isWaiting}
+            style={{
+              width: "100%",
+              background: isWaiting ? "#ccc" : "#06C167",
+              border: "none",
+              borderRadius: 100,
+              color: "#fff",
+              fontWeight: 800,
+              fontSize: 16,
+              padding: "17px",
+              cursor: isWaiting ? "not-allowed" : "pointer",
+              opacity: isWaiting ? 0.7 : 1
+            }}
+          >
+            {isWaiting ? `Wait ${formatWaitTime(waitTimeLeft)}` : "Picked Up · Start Delivery"}
+          </button>
+        </div>
+      </div>
+
+      {/* Chat with customer during pickup */}
+      <ChatPanel
+        customerName={order.customer.name}
+        messages={chatMessages}
+        onSendMessage={handleSendMessage}
+        isOpen={showChat}
+        onToggle={() => setShowChat(!showChat)}
+      />
+    </>
   );
 }
 
@@ -856,17 +1202,28 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
 
   function loadState() {
     try { const r = localStorage.getItem(stateKey); if (r) return JSON.parse(r); } catch {}
-    return { totalEarnings: 0, tripCount: 0, loginCount: 0 };
+    return { totalEarnings: 0, tripCount: 0, loginCount: 0, todayEarnings: 0, lastCashOutDate: null, cashOutBalance: 0 };
   }
   const saved = loadState();
+
+  // Check if we need to reset today's earnings (new day)
+  const today = new Date().toDateString();
+  const shouldResetTodayEarnings = saved.lastCashOutDate && new Date(saved.lastCashOutDate).toDateString() !== today;
 
   const [profile, setProfile] = useState<DriverProfile>(initialProfile);
   const [phase, setPhase] = useState<Phase>("offline");
   const [availableOrders, setAvailableOrders] = useState<Order[]>([]);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [selectedOrderCard, setSelectedOrderCard] = useState<Order | null>(null);
-  const [totalEarnings, setTotalEarnings] = useState<number>(saved.totalEarnings ?? 0);
+  // cashOutBalance: amount available to cash out (resets on cash out)
+  const [cashOutBalance, setCashOutBalance] = useState<number>(shouldResetTodayEarnings ? 0 : (saved.cashOutBalance ?? saved.totalEarnings ?? 0));
+  // todayEarnings: amount earned today (resets at midnight)
+  const [todayEarnings, setTodayEarnings] = useState<number>(shouldResetTodayEarnings ? 0 : (saved.todayEarnings ?? saved.totalEarnings ?? 0));
+  // totalEarnings kept for backwards compatibility
+  const [totalEarnings, setTotalEarnings] = useState<number>(saved.cashOutBalance ?? saved.totalEarnings ?? 0);
   const [tripCount, setTripCount] = useState<number>(saved.tripCount ?? 0);
+  const [activeJobsCount, setActiveJobsCount] = useState<number>(0);
+  const [lastCashOutDate, setLastCashOutDate] = useState<string | null>(saved.lastCashOutDate ?? null);
   const [sessionTime, setSessionTime] = useState(0);
   const [progress, setProgress] = useState(0);
   const [rankedUp, setRankedUp] = useState<Rank | null>(null);
@@ -884,6 +1241,10 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
   const [acceptedCount, setAcceptedCount] = useState<number>(saved.acceptedCount ?? 0);
   const acceptanceRate = offeredCount > 0 ? Math.round((acceptedCount / offeredCount) * 100) : 100;
   const accWarning = offeredCount >= 5 && acceptanceRate < 80;
+  // Restaurant wait timer (random wait when collecting order)
+  const [restaurantWaitTime, setRestaurantWaitTime] = useState(0);
+  const [isWaitingAtRestaurant, setIsWaitingAtRestaurant] = useState(false);
+  const restaurantWaitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isBusy = busyZones.length >= 2;
   const maxMultiplier = busyZones.length > 0 ? Math.max(...busyZones.map(z => z.multiplier)) : 1;
@@ -891,12 +1252,31 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
   useEffect(() => {
     const raw = localStorage.getItem(stateKey);
     const state = raw ? JSON.parse(raw) : {};
-    state.totalEarnings = totalEarnings;
+    state.cashOutBalance = cashOutBalance;
+    state.todayEarnings = todayEarnings;
+    state.totalEarnings = cashOutBalance; // backwards compatibility
     state.tripCount     = tripCount;
     state.offeredCount  = offeredCount;
     state.acceptedCount = acceptedCount;
+    state.lastCashOutDate = lastCashOutDate;
     localStorage.setItem(stateKey, JSON.stringify(state));
-  }, [totalEarnings, tripCount, offeredCount, acceptedCount]);
+  }, [cashOutBalance, todayEarnings, tripCount, offeredCount, acceptedCount, lastCashOutDate]);
+
+  // Midnight check - reset todayEarnings at midnight
+  useEffect(() => {
+    const checkMidnight = () => {
+      const now = new Date();
+      const lastReset = localStorage.getItem('lastEarningsReset');
+      const today = now.toDateString();
+      if (lastReset !== today) {
+        setTodayEarnings(0);
+        localStorage.setItem('lastEarningsReset', today);
+      }
+    };
+    checkMidnight();
+    const interval = setInterval(checkMidnight, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, []);
 
   // ── Wake Lock (prevent screen sleep while driving) ──
   useEffect(() => {
@@ -965,23 +1345,38 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
   }
 
   const spawnOrders = useCallback(() => {
-    if (phaseRef.current !== "online") return;
+    // Allow jobs while online OR on delivery (as long as under 3 active jobs)
+    if (phaseRef.current === "offline") return;
+    if (activeJobsCount >= 3) return; // Max 3 jobs at a time
+    // Don't spawn if already selecting an order
+    if (phaseRef.current === "selecting") return;
+
     const rankName = getRank(tripCount).name;
-    const orders = generateOrderBatch(DRIVER_HOME, busyZones, rankName, acceptanceRate);
-    setOfferedCount(c => c + orders.length);
-    setAvailableOrders(orders);
+
+    // All ranks get normal jobs: single job pops up directly
+    const orders = generateOrderBatch(DRIVER_HOME, busyZones, rankName, acceptanceRate, 1);
+    if (orders.length === 0) {
+      scheduleNextOrders();
+      return;
+    }
+    const singleOrder = orders[0];
+    // Set as selected order directly (pops up immediately)
+    setOfferedCount(c => c + 1);
+    setAvailableOrders([singleOrder]);
+    setSelectedOrderCard(singleOrder);
     phaseRef.current = "selecting";
     setPhase("selecting");
     playNewOrder();
-  }, [busyZones, tripCount, acceptanceRate]);
+  }, [busyZones, tripCount, acceptanceRate, activeJobsCount]);
 
   const scheduleNextOrders = useCallback(() => {
     if (cooldownInterval) clearInterval(cooldownInterval);
-    const cooldown = isBusy ? Math.floor(rand(15000, 30000)) : Math.floor(rand(45000, 75000));
+    // Not busy: 2-3 minutes (120000-180000ms), Busy: 30 seconds (30000ms)
+    const cooldown = isBusy ? 30000 : Math.floor(rand(120000, 180000));
     const cooldownSecs = Math.floor(cooldown / 1000);
     phaseRef.current = "online";
     setPhase("online");
-    startCooldown(cooldownSecs, () => { if (phaseRef.current === "online") spawnOrders(); });
+    startCooldown(cooldownSecs, () => { if (phaseRef.current !== "offline") spawnOrders(); });
   }, [isBusy, spawnOrders]);
 
   function handleGoOnline() {
@@ -1010,6 +1405,7 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     setSelectedOrderCard(null);
     setAvailableOrders([]);
     setActiveOrder(order);
+    setActiveJobsCount(c => c + 1); // Increment active jobs
     phaseRef.current = "to-restaurant";
     setPhase("to-restaurant");
     progressRef.current = 0;
@@ -1040,13 +1436,32 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
           phaseRef.current = "at-restaurant";
           setPhase("at-restaurant");
           playArrived();
+          // 50% chance of having to wait for order (30-120 seconds)
+          if (Math.random() < 0.5) {
+            const waitSeconds = Math.floor(rand(30, 120));
+            setRestaurantWaitTime(waitSeconds);
+            setIsWaitingAtRestaurant(true);
+            if (restaurantWaitTimerRef.current) clearInterval(restaurantWaitTimerRef.current);
+            let remaining = waitSeconds;
+            restaurantWaitTimerRef.current = setInterval(() => {
+              remaining -= 1;
+              setRestaurantWaitTime(remaining);
+              if (remaining <= 0) {
+                clearInterval(restaurantWaitTimerRef.current!);
+                setIsWaitingAtRestaurant(false);
+              }
+            }, 1000);
+          }
         } else {
           phaseRef.current = "delivered";
           setPhase("delivered");
           const tip = pick(TIPS);
           setCurrentTip(tip);
           const earned = parseFloat((order.total + tip).toFixed(2));
+          setCashOutBalance(prev => parseFloat((prev + earned).toFixed(2)));
+          setTodayEarnings(prev => parseFloat((prev + earned).toFixed(2)));
           setTotalEarnings(prev => parseFloat((prev + earned).toFixed(2)));
+          setActiveJobsCount(c => Math.max(0, c - 1)); // Decrement active jobs
           const newCount = tripCount + 1;
           setTripCount(newCount);
           const prevRank = getRank(tripCount);
@@ -1059,6 +1474,13 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
   }
 
   function handlePickedUp() {
+    // Clear any restaurant wait timer
+    if (restaurantWaitTimerRef.current) {
+      clearInterval(restaurantWaitTimerRef.current);
+      restaurantWaitTimerRef.current = null;
+    }
+    setIsWaitingAtRestaurant(false);
+    setRestaurantWaitTime(0);
     phaseRef.current = "to-customer";
     setPhase("to-customer");
     progressRef.current = 0;
@@ -1075,11 +1497,14 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
   }
 
   const handleCashOut = useCallback(() => {
-    const amount = totalEarnings;
+    const amount = cashOutBalance;
+    const today = new Date().toDateString();
+    setCashOutBalance(0);
     setTotalEarnings(0);
+    setLastCashOutDate(today);
     setShowCashOutMsg(`£${amount.toFixed(2)} transferred!`);
     setTimeout(() => setShowCashOutMsg(""), 3500);
-  }, [totalEarnings]);
+  }, [cashOutBalance]);
 
   const handleUpdateProfile = useCallback((updated: DriverProfile) => {
     localStorage.setItem("uber_eats_driver_profile", JSON.stringify(updated));
@@ -1095,7 +1520,7 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
 
       {showVerification && <VerificationModal profile={profile} onSuccess={() => setShowVerification(false)} onFail={() => { setShowVerification(false); handleGoOffline(); }} />}
 
-      <SideMenu isOpen={sideMenuOpen} profile={profile} earnings={totalEarnings} tripCount={tripCount}
+      <SideMenu isOpen={sideMenuOpen} profile={profile} earnings={cashOutBalance} todayEarnings={todayEarnings} tripCount={tripCount}
         onClose={() => setSideMenuOpen(false)} onUpdateProfile={handleUpdateProfile}
         onCashOut={handleCashOut} stateKey={stateKey} />
 
@@ -1126,8 +1551,8 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
                 </div>
               )}
               <div style={{ background: "white", borderRadius: 20, padding: "8px 16px", boxShadow: "0 2px 10px rgba(0,0,0,0.18)", textAlign: "center" }}>
-                <div style={{ fontWeight: 900, fontSize: 18, color: "#1a1a1a", lineHeight: 1 }}>{fmt(totalEarnings)}</div>
-                <div style={{ fontSize: 9, color: "#aaa", fontWeight: 700, letterSpacing: "0.5px", marginTop: 2 }}>TODAY</div>
+                <div style={{ fontWeight: 900, fontSize: 18, color: "#1a1a1a", lineHeight: 1 }}>{fmt(cashOutBalance)}</div>
+                <div style={{ fontSize: 9, color: "#aaa", fontWeight: 700, letterSpacing: "0.5px", marginTop: 2 }}>BALANCE</div>
               </div>
             </div>
           </div>
@@ -1174,7 +1599,7 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
                 </div>
                 <div style={{ width: 1, background: "#ebebeb" }} />
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontWeight: 800, fontSize: 18, color: "#06C167" }}>{fmt(totalEarnings)}</div>
+                  <div style={{ fontWeight: 800, fontSize: 18, color: "#06C167" }}>{fmt(cashOutBalance)}</div>
                   <div style={{ fontSize: 10, color: "#aaa", marginTop: 2 }}>Balance</div>
                 </div>
                 <div style={{ width: 1, background: "#ebebeb" }} />
@@ -1221,7 +1646,7 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
               <div style={{ display: "flex", gap: 0, paddingBottom: 16, paddingLeft: 16, paddingRight: 16, borderTop: "1px solid #f5f5f5" }}>
                 {[
                   { v: String(tripCount),        l: "Trips" },
-                  { v: fmt(totalEarnings),        l: "Earned" },
+                  { v: fmt(cashOutBalance),        l: "Earned" },
                   { v: fmtTime(sessionTime),      l: "Online" },
                   { v: `${acceptanceRate}%`,      l: "Acceptance" },
                 ].map((s, i) => (
@@ -1496,7 +1921,7 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
             </div>
           )}
 
-          {phase === "at-restaurant" && activeOrder && <PickupPanel order={activeOrder} onPickedUp={handlePickedUp} />}
+          {phase === "at-restaurant" && activeOrder && <PickupPanel order={activeOrder} onPickedUp={handlePickedUp} waitTimeLeft={restaurantWaitTime} isWaiting={isWaitingAtRestaurant} />}
           {phase === "delivered" && activeOrder && <DeliveredPanel order={activeOrder} tip={currentTip} rankedUp={rankedUp} onNext={handleNextAfterDelivery} />}
         </>
       )}

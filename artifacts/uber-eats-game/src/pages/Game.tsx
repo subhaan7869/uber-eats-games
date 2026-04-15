@@ -207,8 +207,8 @@ function generateOrderBatch(
   const isPriorityRank = rankName === "Diamond" || rankName === "Platinum";
   const isBusy = busyZones.length >= 2;
 
-  // For priority ranks: 1-3 jobs based on busyness, for normal ranks: always 1 job
-  const maxCount = isPriorityRank ? Math.min(3, maxJobsAllowed) : Math.min(1, maxJobsAllowed);
+  // All ranks can get 1-3 jobs based on busyness
+  const maxCount = Math.min(3, maxJobsAllowed);
   const minCount = isPriorityRank ? 1 : 1;
   const count = Math.min(maxCount, sorted.length, Math.floor(rand(minCount, maxCount + 1)));
 
@@ -512,8 +512,8 @@ function NavHeader({ phase, order }: { phase: Phase; order: Order | null }) {
 
 type MenuPage = null | "earnings" | "wallet" | "account" | "rank";
 
-function SideMenu({ isOpen, profile, earnings, todayEarnings, tripCount, onClose, onUpdateProfile, onCashOut, stateKey }: {
-  isOpen: boolean; profile: DriverProfile; earnings: number; todayEarnings: number; tripCount: number;
+function SideMenu({ isOpen, profile, earnings, todayEarnings, tripCount, totalCashedOut, onClose, onUpdateProfile, onCashOut, stateKey }: {
+  isOpen: boolean; profile: DriverProfile; earnings: number; todayEarnings: number; tripCount: number; totalCashedOut: number;
   onClose: () => void; onUpdateProfile: (p: DriverProfile) => void;
   onCashOut: () => void; stateKey: string;
 }) {
@@ -616,10 +616,14 @@ function SideMenu({ isOpen, profile, earnings, todayEarnings, tripCount, onClose
                 <div style={{ color: "#888", fontSize: 12, marginBottom: 4 }}>Available to Cash Out</div>
                 <div style={{ color: "#06C167", fontWeight: 900, fontSize: 36 }}>{fmt(earnings)}</div>
               </div>
-              <div style={{ background: "#f8f8f8", borderRadius: 16, padding: "16px", marginBottom: 14, textAlign: "center" }}>
+              <div style={{ background: "#f8f8f8", borderRadius: 16, padding: "16px", marginBottom: 10, textAlign: "center" }}>
                 <div style={{ color: "#888", fontSize: 11, marginBottom: 2 }}>Earned Today (resets at midnight)</div>
                 <div style={{ color: "#555", fontWeight: 700, fontSize: 20 }}>{fmt(todayEarnings)}</div>
                 <div style={{ color: "#bbb", fontSize: 11, marginTop: 2 }}>{tripCount} deliveries</div>
+              </div>
+              <div style={{ background: "#06C16710", borderRadius: 16, padding: "14px", marginBottom: 14, textAlign: "center", border: "1px solid #06C16730" }}>
+                <div style={{ color: "#06C167", fontSize: 11, marginBottom: 2 }}>💰 Total Cashed Out (All Time)</div>
+                <div style={{ color: "#06C167", fontWeight: 800, fontSize: 22 }}>{fmt(totalCashedOut)}</div>
               </div>
               <button onClick={() => { onCashOut(); setPage(null); }} disabled={earnings <= 0} style={{ width: "100%", background: earnings > 0 ? "#06C167" : "#f0f0f0", border: "none", borderRadius: 100, color: earnings > 0 ? "#fff" : "#bbb", fontWeight: 800, fontSize: 16, padding: "16px", cursor: earnings > 0 ? "pointer" : "default" }}>
                 Cash Out {earnings > 0 ? fmt(earnings) : ""}
@@ -722,8 +726,8 @@ function VerificationModal({ profile, onSuccess, onFail }: {
   }
 
   function handleForgotVerify() {
-    const nameOk = forgotName.trim().toLowerCase() === profile.name.trim().toLowerCase();
-    const passOk = forgotPass === profile.password;
+    const nameOk = forgotName.trim().toLowerCase() === (profile.name || "").trim().toLowerCase();
+    const passOk = forgotPass.trim() === (profile.password || "").trim();
     if (nameOk && passOk) { setForgotErr(""); setRevealed(true); }
     else setForgotErr("Name or password didn't match.");
   }
@@ -1202,7 +1206,7 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
 
   function loadState() {
     try { const r = localStorage.getItem(stateKey); if (r) return JSON.parse(r); } catch {}
-    return { totalEarnings: 0, tripCount: 0, loginCount: 0, todayEarnings: 0, lastCashOutDate: null, cashOutBalance: 0 };
+    return { totalEarnings: 0, tripCount: 0, loginCount: 0, todayEarnings: 0, lastCashOutDate: null, cashOutBalance: 0, totalCashedOut: 0 };
   }
   const saved = loadState();
 
@@ -1224,6 +1228,7 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
   const [tripCount, setTripCount] = useState<number>(saved.tripCount ?? 0);
   const [activeJobsCount, setActiveJobsCount] = useState<number>(0);
   const [lastCashOutDate, setLastCashOutDate] = useState<string | null>(saved.lastCashOutDate ?? null);
+  const [totalCashedOut, setTotalCashedOut] = useState<number>(saved.totalCashedOut ?? 0);
   const [sessionTime, setSessionTime] = useState(0);
   const [progress, setProgress] = useState(0);
   const [rankedUp, setRankedUp] = useState<Rank | null>(null);
@@ -1259,8 +1264,9 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     state.offeredCount  = offeredCount;
     state.acceptedCount = acceptedCount;
     state.lastCashOutDate = lastCashOutDate;
+    state.totalCashedOut = totalCashedOut;
     localStorage.setItem(stateKey, JSON.stringify(state));
-  }, [cashOutBalance, todayEarnings, tripCount, offeredCount, acceptedCount, lastCashOutDate]);
+  }, [cashOutBalance, todayEarnings, tripCount, offeredCount, acceptedCount, lastCashOutDate, totalCashedOut]);
 
   // Midnight check - reset todayEarnings at midnight
   useEffect(() => {
@@ -1354,7 +1360,9 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     const rankName = getRank(tripCount).name;
 
     // All ranks get normal jobs: single job pops up directly
-    const orders = generateOrderBatch(DRIVER_HOME, busyZones, rankName, acceptanceRate, 1);
+    // Allow up to 3 total active jobs
+    const jobsRemaining = 3 - activeJobsCount;
+    const orders = generateOrderBatch(DRIVER_HOME, busyZones, rankName, acceptanceRate, jobsRemaining);
     if (orders.length === 0) {
       scheduleNextOrders();
       return;
@@ -1502,9 +1510,10 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     setCashOutBalance(0);
     setTotalEarnings(0);
     setLastCashOutDate(today);
-    setShowCashOutMsg(`£${amount.toFixed(2)} transferred!`);
-    setTimeout(() => setShowCashOutMsg(""), 3500);
-  }, [cashOutBalance]);
+    setTotalCashedOut(prev => prev + amount);
+    setShowCashOutMsg(`£${amount.toFixed(2)} transferred! Total cashed out: £${(totalCashedOut + amount).toFixed(2)}`);
+    setTimeout(() => setShowCashOutMsg(""), 4000);
+  }, [cashOutBalance, totalCashedOut]);
 
   const handleUpdateProfile = useCallback((updated: DriverProfile) => {
     localStorage.setItem("uber_eats_driver_profile", JSON.stringify(updated));
@@ -1520,7 +1529,7 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
 
       {showVerification && <VerificationModal profile={profile} onSuccess={() => setShowVerification(false)} onFail={() => { setShowVerification(false); handleGoOffline(); }} />}
 
-      <SideMenu isOpen={sideMenuOpen} profile={profile} earnings={cashOutBalance} todayEarnings={todayEarnings} tripCount={tripCount}
+      <SideMenu isOpen={sideMenuOpen} profile={profile} earnings={cashOutBalance} todayEarnings={todayEarnings} tripCount={tripCount} totalCashedOut={totalCashedOut}
         onClose={() => setSideMenuOpen(false)} onUpdateProfile={handleUpdateProfile}
         onCashOut={handleCashOut} stateKey={stateKey} />
 

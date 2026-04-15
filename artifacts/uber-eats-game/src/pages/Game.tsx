@@ -4,7 +4,8 @@ import type { DriverProfile } from "./Onboarding";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Phase = "offline" | "online" | "selecting" | "to-restaurant" | "at-restaurant" | "to-customer" | "delivered";
+type Phase = "offline" | "online" | "selecting" | "to-restaurant" | "at-restaurant" | "to-customer" | "delivered" | "rating" | "cancelled";
+type Platform = "uber" | "bolt" | null;
 
 interface MenuItem { name: string; price: number; }
 interface Restaurant { name: string; emoji: string; color: string; address: string; fullAddress: string; menu: MenuItem[]; prepMin: number; prepMax: number; mapX: number; mapY: number; }
@@ -19,6 +20,85 @@ interface Order {
   surgeMultiplier: number;
   matchReason: string;        // "Near you" | "High fare" | "Surge zone" | "Priority match"
   isHighValue: boolean;
+  notes?: string;             // Delivery notes from customer
+  batchOrderId?: string;      // For multi-stop orders
+  batchIndex?: number;        // 0 = first, 1 = second
+  batchTotal?: number;        // Total orders in batch =3
+
+}
+
+// ─── Uber Features ────────────────────────────────────────────────────────────
+
+// Cancel reasons
+const CANCEL_REASONS = [
+  "Restaurant closed",
+  "Order not ready - waited too long",
+  "Can't find parking",
+  "Can't find restaurant",
+  "Order too large for my vehicle",
+  "Customer didn't answer",
+  "Wrong address provided",
+  "Emergency or safety concern"
+];
+
+// Delivery notes templates
+const DELIVERY_NOTES = [
+  "Leave at door",
+  "Hand it to me",
+  "Meet outside",
+  "Gate code: ",
+  "Apartment ",
+  "Ring bell",
+  "Don't ring bell",
+  "Call upon arrival",
+  "Leave in lobby",
+  "Side entrance",
+  "Back door",
+  "Building access code: ",
+  "Intercom: ",
+  "Beware of dog",
+  "Knock loudly",
+  "Text when arrived"
+];
+
+// Quest templates
+interface Quest {
+  id: string;
+  type: "trips" | "earnings" | "consecutive" | "rating";
+  title: string;
+  description: string;
+  target: number;
+  reward: number;
+  progress: number;
+  deadline: string;
+}
+
+const QUEST_TEMPLATES: Omit<Quest, "id" | "progress" | "deadline">[] = [
+  { type: "trips", title: "Lunch Rush", description: "Complete 5 trips between 11am-2pm", target: 5, reward: 25 },
+  { type: "trips", title: "Dinner Dash", description: "Complete 8 trips between 5pm-9pm", target: 8, reward: 40 },
+  { type: "earnings", title: "Big Earner", description: "Earn £100 in a single day", target: 100, reward: 20 },
+  { type: "consecutive", title: "Streak Master", description: "Complete 10 trips without declining", target: 10, reward: 35 },
+  { type: "rating", title: "Top Rated", description: "Get 5 five-star ratings", target: 5, reward: 15 }
+];
+
+// Rating system
+interface Rating {
+  id: string;
+  customerName: string;
+  stars: number;
+  comment: string;
+  date: string;
+  tip: number;
+}
+
+// Earnings breakdown
+interface EarningsBreakdown {
+  baseFare: number;
+  tip: number;
+  surge: number;
+  questBonus: number;
+  waitTimePay: number;
+  total: number;
 }
 interface BusyZone { id: string; x: number; y: number; r: number; label: string; multiplier: number; }
 
@@ -116,6 +196,37 @@ function pick<T>(a: T[]): T { return a[Math.floor(Math.random() * a.length)]; }
 function rand(min: number, max: number) { return Math.random() * (max - min) + min; }
 function fmt(n: number) { return `£${n.toFixed(2)}`; }
 let orderIdCounter = 0;
+let batchIdCounter = 0;
+
+// Generate delivery note with random details
+function generateDeliveryNote(): string {
+  const base = pick(DELIVERY_NOTES);
+  if (base.includes(":")) {
+    if (base.includes("Gate")) return base + Math.floor(1000 + Math.random() * 9000);
+    if (base.includes("Apartment")) return base + Math.floor(1 + Math.random() * 50);
+    if (base.includes("intercom")) return base + Math.floor(1 + Math.random() * 99);
+  }
+  return base;
+}
+
+// Generate random quests
+function generateQuests(): Quest[] {
+  const now = new Date();
+  const shuffled = [...QUEST_TEMPLATES].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 3).map((template, i) => ({
+    ...template,
+    id: `quest-${Date.now()}-${i}`,
+    progress: 0,
+    deadline: i === 0 ? "Today" : i === 1 ? "This weekend" : "This week"
+  }));
+}
+
+// Calculate wait time pay (after 10 minutes)
+function calculateWaitTimePay(waitSeconds: number): number {
+  if (waitSeconds <= 600) return 0;
+  const extraMinutes = Math.floor((waitSeconds - 600) / 60);
+  return parseFloat((extraMinutes * 0.15).toFixed(2));
+}
 
 function getSurgeAt(x: number, y: number, busyZones: BusyZone[]): number {
   for (const z of busyZones) {
@@ -161,6 +272,9 @@ function generateRealisticOrder(
   else if (d2r < 1)  matchReason = "Near you";
   else               matchReason = "Best match";
 
+  // Generate delivery note with 80% chance
+  const notes = Math.random() < 0.8 ? generateDeliveryNote() : undefined;
+
   return {
     id: String(++orderIdCounter),
     restaurant, customer, items,
@@ -174,6 +288,7 @@ function generateRealisticOrder(
     surgeMultiplier: surge,
     matchReason,
     isHighValue: highVal,
+    notes,
   };
 }
 
@@ -212,9 +327,18 @@ function generateOrderBatch(
   const minCount = isPriorityRank ? 1 : 1;
   const count = Math.min(maxCount, sorted.length, Math.floor(rand(minCount, maxCount + 1)));
 
-  return sorted.slice(0, count).map(r =>
-    generateRealisticOrder(driverPos, r, busyZones, rankName, acceptanceRate)
-  );
+  // Generate batch ID if multiple orders
+  const batchId = count > 1 ? `batch-${++batchIdCounter}` : undefined;
+
+  return sorted.slice(0, count).map((r, i) => {
+    const order = generateRealisticOrder(driverPos, r, busyZones, rankName, acceptanceRate);
+    if (batchId) {
+      order.batchOrderId = batchId;
+      order.batchIndex = i;
+      order.batchTotal = count;
+    }
+    return order;
+  });
 }
 
 // ─── BUSY ZONES ───────────────────────────────────────────────────────────────
@@ -510,10 +634,204 @@ function NavHeader({ phase, order }: { phase: Phase; order: Order | null }) {
 
 // ─── Side Menu ────────────────────────────────────────────────────────────────
 
-type MenuPage = null | "earnings" | "wallet" | "account" | "rank";
+type MenuPage = null | "earnings" | "wallet" | "account" | "rank" | "quests" | "ratings";
 
-function SideMenu({ isOpen, profile, earnings, todayEarnings, tripCount, totalCashedOut, onClose, onUpdateProfile, onCashOut, stateKey }: {
-  isOpen: boolean; profile: DriverProfile; earnings: number; todayEarnings: number; tripCount: number; totalCashedOut: number;
+// ─── Uber Feature UI Components ───────────────────────────────────────────────
+
+function QuestPanel({ quests }: { quests: Quest[] }) {
+  const activeQuests = quests.filter(q => q.progress < q.target);
+  if (activeQuests.length === 0) return null;
+  
+  return (
+    <div style={{ position: "fixed", top: 70, right: 14, zIndex: 100, width: 220 }}>
+      {activeQuests.slice(0, 2).map(q => (
+        <div key={q.id} style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)", borderRadius: 14, padding: "12px 14px", marginBottom: 8, border: "1px solid rgba(255,255,255,0.1)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <span style={{ color: "#FFD700", fontSize: 12, fontWeight: 800 }}>🎯 {q.title}</span>
+            <span style={{ color: "#06C167", fontSize: 11, fontWeight: 700 }}>+£{q.reward}</span>
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 10, marginBottom: 8 }}>{q.description}</div>
+          <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: 4, height: 6, overflow: "hidden" }}>
+            <div style={{ height: "100%", background: "linear-gradient(90deg, #06C167, #FFD700)", width: `${Math.min(100, (q.progress / q.target) * 100)}%`, borderRadius: 4 }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 9 }}>{q.progress}/{q.target}</span>
+            <span style={{ color: "rgba(255,255,255,0.5)", fontSize: 9 }}>{q.deadline}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RatingModal({ rating, isOpen, onClose }: { rating: Rating | null; isOpen: boolean; onClose: () => void }) {
+  if (!isOpen || !rating) return null;
+  
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "fadeIn 0.3s ease" }}>
+      <div style={{ background: "white", borderRadius: 28, width: "100%", maxWidth: 340, padding: "32px 24px", textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 8 }}>⭐</div>
+        <div style={{ fontWeight: 800, fontSize: 22, marginBottom: 4 }}>New Rating!</div>
+        <div style={{ color: "#888", fontSize: 14, marginBottom: 20 }}>{rating.customerName} rated you</div>
+        
+        <div style={{ display: "flex", justifyContent: "center", gap: 4, marginBottom: 16 }}>
+          {[1,2,3,4,5].map(star => (
+            <span key={star} style={{ fontSize: 32, color: star <= rating.stars ? "#FFD700" : "#ddd" }}>★</span>
+          ))}
+        </div>
+        
+        <div style={{ background: "#f8f8f8", borderRadius: 12, padding: "14px", marginBottom: 24 }}>
+          <div style={{ color: "#555", fontSize: 14, fontStyle: "italic" }}>"{rating.comment}"</div>
+        </div>
+        
+        {rating.tip > 0 && (
+          <div style={{ background: "#E8F5E9", borderRadius: 12, padding: "12px", marginBottom: 20 }}>
+            <div style={{ color: "#2E7D32", fontSize: 14, fontWeight: 700 }}>💰 Tipped £{rating.tip.toFixed(2)}!</div>
+          </div>
+        )}
+        
+        <button onClick={onClose} style={{ width: "100%", background: "#06C167", border: "none", borderRadius: 100, padding: "16px", color: "white", fontWeight: 800, fontSize: 16, cursor: "pointer" }}>
+          Continue Driving
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function QuestCompleteModal({ quest, isOpen, onClose }: { quest: Quest | null; isOpen: boolean; onClose: () => void }) {
+  if (!isOpen || !quest) return null;
+  
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 650, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "fadeIn 0.3s ease" }}>
+      <div style={{ background: "linear-gradient(135deg, #1a1a2e, #16213e)", borderRadius: 28, width: "100%", maxWidth: 360, padding: "36px 28px", textAlign: "center", border: "2px solid #FFD700" }}>
+        <div style={{ fontSize: 56, marginBottom: 12 }}>🏆</div>
+        <div style={{ color: "#FFD700", fontWeight: 900, fontSize: 24, marginBottom: 8 }}>Quest Complete!</div>
+        <div style={{ color: "white", fontSize: 18, fontWeight: 700, marginBottom: 8 }}>{quest.title}</div>
+        <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginBottom: 24 }}>{quest.description}</div>
+        
+        <div style={{ background: "rgba(255,255,255,0.1)", borderRadius: 16, padding: "20px", marginBottom: 28 }}>
+          <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12, marginBottom: 4 }}>BONUS EARNED</div>
+          <div style={{ color: "#06C167", fontWeight: 900, fontSize: 42 }}>£{quest.reward}</div>
+        </div>
+        
+        <button onClick={onClose} style={{ width: "100%", background: "linear-gradient(90deg, #FFD700, #FFA000)", border: "none", borderRadius: 100, padding: "18px", color: "#1a1a2e", fontWeight: 900, fontSize: 17, cursor: "pointer" }}>
+          🎉 Claim Reward
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EarningsBreakdownModal({ breakdown, isOpen, onClose }: { breakdown: EarningsBreakdown | null; isOpen: boolean; onClose: () => void }) {
+  if (!isOpen || !breakdown) return null;
+  
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", zIndex: 550, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, animation: "fadeIn 0.3s ease" }}>
+      <div style={{ background: "white", borderRadius: 24, width: "100%", maxWidth: 320, overflow: "hidden" }}>
+        <div style={{ background: "#06C167", padding: "20px 24px", textAlign: "center" }}>
+          <div style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, marginBottom: 4 }}>TRIP EARNINGS</div>
+          <div style={{ color: "white", fontWeight: 900, fontSize: 36 }}>{fmt(breakdown.total)}</div>
+        </div>
+        
+        <div style={{ padding: "20px 24px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #f0f0f0" }}>
+            <span style={{ color: "#666", fontSize: 14 }}>Base Fare</span>
+            <span style={{ color: "#1a1a1a", fontWeight: 600, fontSize: 14 }}>{fmt(breakdown.baseFare)}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #f0f0f0" }}>
+            <span style={{ color: "#666", fontSize: 14 }}>Customer Tip</span>
+            <span style={{ color: "#2E7D32", fontWeight: 600, fontSize: 14 }}>+{fmt(breakdown.tip)}</span>
+          </div>
+          {breakdown.surge > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #f0f0f0" }}>
+              <span style={{ color: "#E65100", fontSize: 14 }}>⚡ Surge Bonus</span>
+              <span style={{ color: "#E65100", fontWeight: 600, fontSize: 14 }}>+{fmt(breakdown.surge)}</span>
+            </div>
+          )}
+          {breakdown.waitTimePay > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #f0f0f0" }}>
+              <span style={{ color: "#1565C0", fontSize: 14 }}>⏱️ Wait Time Pay</span>
+              <span style={{ color: "#1565C0", fontWeight: 600, fontSize: 14 }}>+{fmt(breakdown.waitTimePay)}</span>
+            </div>
+          )}
+          {breakdown.questBonus > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #f0f0f0" }}>
+              <span style={{ color: "#FFD700", fontSize: 14 }}>🎯 Quest Bonus</span>
+              <span style={{ color: "#FFD700", fontWeight: 800, fontSize: 14 }}>+{fmt(breakdown.questBonus)}</span>
+            </div>
+          )}
+        </div>
+        
+        <div style={{ padding: "16px 24px 24px" }}>
+          <button onClick={onClose} style={{ width: "100%", background: "#06C167", border: "none", borderRadius: 100, padding: "14px", color: "white", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
+            Got it
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CancelReasonsModal({ isOpen, onClose, onSelect }: { isOpen: boolean; onClose: () => void; onSelect: (reason: string) => void }) {
+  if (!isOpen) return null;
+  
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", zIndex: 500, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "white", borderRadius: 24, width: "100%", maxWidth: 360, maxHeight: "80vh", overflow: "auto" }}>
+        <div style={{ padding: "24px 20px 16px", borderBottom: "1px solid #f0f0f0" }}>
+          <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 4 }}>Cancel Order</div>
+          <div style={{ color: "#888", fontSize: 14 }}>Please select a reason</div>
+        </div>
+        <div style={{ padding: "8px 0" }}>
+          {CANCEL_REASONS.map((reason, i) => (
+            <button
+              key={i}
+              onClick={() => onSelect(reason)}
+              style={{
+                width: "100%",
+                background: "none",
+                border: "none",
+                borderBottom: "1px solid #f5f5f5",
+                padding: "16px 20px",
+                textAlign: "left",
+                fontSize: 15,
+                color: "#333",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 12
+              }}
+            >
+              <span style={{ fontSize: 18 }}>{["🚪", "⏰", "🅿️", "📍", "🍽️", "📞", "🏠", "🚨"][i]}</span>
+              {reason}
+            </button>
+          ))}
+        </div>
+        <div style={{ padding: "12px 20px 20px" }}>
+          <button
+            onClick={onClose}
+            style={{
+              width: "100%",
+              background: "#f5f5f5",
+              border: "none",
+              borderRadius: 100,
+              padding: "14px",
+              fontSize: 15,
+              fontWeight: 600,
+              color: "#666",
+              cursor: "pointer"
+            }}
+          >
+            Keep Order
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SideMenu({ isOpen, profile, earnings, todayEarnings, tripCount, totalCashedOut, activeQuests, ratings, onClose, onUpdateProfile, onCashOut, stateKey }: {
+  isOpen: boolean; profile: DriverProfile; earnings: number; todayEarnings: number; tripCount: number; totalCashedOut: number; activeQuests: Quest[]; ratings: Rating[];
   onClose: () => void; onUpdateProfile: (p: DriverProfile) => void;
   onCashOut: () => void; stateKey: string;
 }) {
@@ -545,6 +863,8 @@ function SideMenu({ isOpen, profile, earnings, todayEarnings, tripCount, totalCa
     { icon: "👥", label: "Refer Friends", badge: null, action: () => {} },
     { icon: "⚡", label: "Opportunities", badge: "•",  action: () => {} },
     { icon: "📊", label: "Earnings",      badge: null, action: () => setPage("earnings") },
+    { icon: "🎯", label: "Quests",        badge: activeQuests.filter(q => q.progress < q.target).length > 0 ? String(activeQuests.filter(q => q.progress < q.target).length) : null, action: () => setPage("quests") },
+    { icon: "⭐", label: "Ratings",       badge: ratings.length > 0 ? String(ratings.length) : null, action: () => setPage("ratings") },
     { icon: rank.icon, label: "Uber Pro", badge: null, action: () => setPage("rank") },
     { icon: "💰", label: "Wallet",        badge: null, action: () => setPage("wallet") },
     { icon: "👤", label: "Account",       badge: null, action: () => setPage("account") },
@@ -693,6 +1013,71 @@ function SideMenu({ isOpen, profile, earnings, todayEarnings, tripCount, totalCa
                 {CITIES.map(c => <button key={c} onClick={() => setEditCity(c)} style={{ padding: "12px 14px", borderRadius: 10, border: editCity === c ? "2px solid #06C167" : "2px solid #e8e8e8", background: editCity === c ? "#06C16710" : "white", textAlign: "left", fontSize: 14, fontWeight: editCity === c ? 700 : 400, color: "#1a1a1a", cursor: "pointer" }}>{c}</button>)}
               </div>
               <button onClick={saveProfile} style={{ width: "100%", background: "#06C167", border: "none", borderRadius: 100, color: "white", fontWeight: 800, fontSize: 15, padding: "16px", cursor: "pointer" }}>{saveMsg || "Save Changes"}</button>
+            </div>
+          )}
+
+          {page === "quests" && (
+            <div style={{ padding: "20px" }}>
+              <button onClick={() => setPage(null)} style={{ background: "none", border: "none", color: "#666", fontSize: 14, cursor: "pointer", marginBottom: 16, padding: 0 }}>← Back</button>
+              <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 20 }}>Quests & Promotions</div>
+              {activeQuests.filter(q => q.progress < q.target).map(q => (
+                <div key={q.id} style={{ background: "#f8f8f8", borderRadius: 16, padding: "16px", marginBottom: 12, border: "2px solid #FFD700" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <span style={{ fontWeight: 800, fontSize: 15, color: "#1a1a1a" }}>🎯 {q.title}</span>
+                    <span style={{ color: "#06C167", fontWeight: 800, fontSize: 14 }}>£{q.reward}</span>
+                  </div>
+                  <div style={{ color: "#666", fontSize: 13, marginBottom: 12 }}>{q.description}</div>
+                  <div style={{ background: "#e0e0e0", borderRadius: 4, height: 8, overflow: "hidden" }}>
+                    <div style={{ height: "100%", background: "linear-gradient(90deg, #06C167, #FFD700)", width: `${Math.min(100, (q.progress / q.target) * 100)}%`, borderRadius: 4 }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6 }}>
+                    <span style={{ color: "#888", fontSize: 12 }}>{q.progress}/{q.target} completed</span>
+                    <span style={{ color: "#888", fontSize: 12 }}>{q.deadline}</span>
+                  </div>
+                </div>
+              ))}
+              {activeQuests.filter(q => q.progress >= q.target).map(q => (
+                <div key={q.id} style={{ background: "#E8F5E9", borderRadius: 16, padding: "16px", marginBottom: 12, border: "2px solid #06C167" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontWeight: 800, fontSize: 15, color: "#2E7D32" }}>✅ {q.title}</span>
+                    <span style={{ color: "#06C167", fontWeight: 800 }}>COMPLETE! +£{q.reward}</span>
+                  </div>
+                </div>
+              ))}
+              {activeQuests.length === 0 && (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#888" }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>🎯</div>
+                  <div style={{ fontSize: 16 }}>No active quests</div>
+                  <div style={{ fontSize: 13, marginTop: 4 }}>Check back tomorrow for new promotions!</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {page === "ratings" && (
+            <div style={{ padding: "20px" }}>
+              <button onClick={() => setPage(null)} style={{ background: "none", border: "none", color: "#666", fontSize: 14, cursor: "pointer", marginBottom: 16, padding: 0 }}>← Back</button>
+              <div style={{ fontWeight: 800, fontSize: 20, marginBottom: 6 }}>Customer Ratings</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 20 }}>
+                <span style={{ fontSize: 24 }}>⭐</span>
+                <span style={{ fontWeight: 900, fontSize: 28, color: "#1a1a1a" }}>
+                  {ratings.length > 0 ? (ratings.reduce((a, r) => a + r.stars, 0) / ratings.length).toFixed(2) : "5.00"}
+                </span>
+                <span style={{ color: "#888", fontSize: 14 }}>({ratings.length} ratings)</span>
+              </div>
+              {ratings.slice(0, 10).map(r => (
+                <div key={r.id} style={{ background: "#f8f8f8", borderRadius: 12, padding: "14px", marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                    <span style={{ fontWeight: 700, fontSize: 14, color: "#1a1a1a" }}>{r.customerName}</span>
+                    <span style={{ color: "#FFD700", fontSize: 14 }}>{"★".repeat(r.stars)}{"☆".repeat(5 - r.stars)}</span>
+                  </div>
+                  <div style={{ color: "#555", fontSize: 13, fontStyle: "italic", marginBottom: 4 }}>"{r.comment}"</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#888" }}>
+                    <span>{r.date}</span>
+                    {r.tip > 0 && <span style={{ color: "#06C167", fontWeight: 700 }}>+£{r.tip.toFixed(2)} tip</span>}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -1001,9 +1386,10 @@ function ChatPanel({ customerName, messages, onSendMessage, isOpen, onToggle }: 
   );
 }
 
-function PickupPanel({ order, onPickedUp, waitTimeLeft, isWaiting }: { order: Order; onPickedUp: () => void; waitTimeLeft: number; isWaiting: boolean }) {
+function PickupPanel({ order, onPickedUp, waitTimeLeft, isWaiting, onCancel }: { order: Order; onPickedUp: () => void; waitTimeLeft: number; isWaiting: boolean; onCancel?: (reason: string) => void }) {
   const [showChat, setShowChat] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [showCancelModal, setShowCancelModal] = useState(false);
 
   // Auto-send customer message if waiting
   useEffect(() => {
@@ -1110,13 +1496,42 @@ function PickupPanel({ order, onPickedUp, waitTimeLeft, isWaiting }: { order: Or
               fontSize: 16,
               padding: "17px",
               cursor: isWaiting ? "not-allowed" : "pointer",
-              opacity: isWaiting ? 0.7 : 1
+              opacity: isWaiting ? 0.7 : 1,
+              marginBottom: 10
             }}
           >
             {isWaiting ? `Wait ${formatWaitTime(waitTimeLeft)}` : "Picked Up · Start Delivery"}
           </button>
+          
+          {/* Cancel Order Button */}
+          <button
+            onClick={() => setShowCancelModal(true)}
+            style={{
+              width: "100%",
+              background: "transparent",
+              border: "2px solid #FF3B30",
+              borderRadius: 100,
+              color: "#FF3B30",
+              fontWeight: 700,
+              fontSize: 14,
+              padding: "12px",
+              cursor: "pointer"
+            }}
+          >
+            🚫 Cancel Order
+          </button>
         </div>
       </div>
+      
+      {/* Cancel Reasons Modal */}
+      <CancelReasonsModal
+        isOpen={showCancelModal}
+        onClose={() => setShowCancelModal(false)}
+        onSelect={(reason) => {
+          setShowCancelModal(false);
+          if (onCancel) onCancel(reason);
+        }}
+      />
 
       {/* Chat with customer during pickup */}
       <ChatPanel
@@ -1206,7 +1621,7 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
 
   function loadState() {
     try { const r = localStorage.getItem(stateKey); if (r) return JSON.parse(r); } catch {}
-    return { totalEarnings: 0, tripCount: 0, loginCount: 0, todayEarnings: 0, lastCashOutDate: null, cashOutBalance: 0, totalCashedOut: 0 };
+    return { totalEarnings: 0, tripCount: 0, loginCount: 0, todayEarnings: 0, lastCashOutDate: null, cashOutBalance: 0, totalCashedOut: 0, activePlatform: null as Platform, activeQuests: [] as Quest[], ratings: [] as Rating[] };
   }
   const saved = loadState();
 
@@ -1251,6 +1666,30 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
   const [isWaitingAtRestaurant, setIsWaitingAtRestaurant] = useState(false);
   const restaurantWaitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Cross-platform state (Uber/Bolt)
+  const [activePlatform, setActivePlatform] = useState<Platform>(saved.activePlatform ?? null);
+  const [platformLocked, setPlatformLocked] = useState(false);
+  const [showPlatformSwitch, setShowPlatformSwitch] = useState(false);
+  
+  // Check if another platform has active jobs (for cross-platform blocking)
+  const [otherPlatformJobs, setOtherPlatformJobs] = useState(false);
+  
+  // Cancel order modal state
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  
+  // Quests & Promotions
+  const [activeQuests, setActiveQuests] = useState<Quest[]>(saved.activeQuests ?? generateQuests());
+  const [showQuestComplete, setShowQuestComplete] = useState<Quest | null>(null);
+  
+  // Customer Ratings
+  const [ratings, setRatings] = useState<Rating[]>(saved.ratings ?? []);
+  const [currentRating, setCurrentRating] = useState<Rating | null>(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  
+  // Earnings Breakdown for last trip
+  const [lastEarningsBreakdown, setLastEarningsBreakdown] = useState<EarningsBreakdown | null>(null);
+  const [showEarningsBreakdown, setShowEarningsBreakdown] = useState(false);
+
   const isBusy = busyZones.length >= 2;
   const maxMultiplier = busyZones.length > 0 ? Math.max(...busyZones.map(z => z.multiplier)) : 1;
 
@@ -1265,8 +1704,11 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     state.acceptedCount = acceptedCount;
     state.lastCashOutDate = lastCashOutDate;
     state.totalCashedOut = totalCashedOut;
+    state.activePlatform = activePlatform;
+    state.activeQuests = activeQuests;
+    state.ratings = ratings;
     localStorage.setItem(stateKey, JSON.stringify(state));
-  }, [cashOutBalance, todayEarnings, tripCount, offeredCount, acceptedCount, lastCashOutDate, totalCashedOut]);
+  }, [cashOutBalance, todayEarnings, tripCount, offeredCount, acceptedCount, lastCashOutDate, totalCashedOut, activePlatform, activeQuests, ratings]);
 
   // Midnight check - reset todayEarnings at midnight
   useEffect(() => {
@@ -1292,6 +1734,28 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     }
     return () => { wakeLock?.release().catch(() => {}); };
   }, [phase]);
+
+  // Cross-platform job checking - Bolt uses localStorage key "bolt_driver_state"
+  useEffect(() => {
+    const checkOtherPlatform = () => {
+      // Check if Bolt has active jobs
+      const boltState = localStorage.getItem("bolt_driver_state");
+      if (boltState) {
+        try {
+          const bolt = JSON.parse(boltState);
+          // Bolt has active job if they have activeOrder or activeJobsCount > 0
+          const hasBoltJob = bolt.activeOrder || (bolt.activeJobsCount > 0) || bolt.phase === "to-restaurant" || bolt.phase === "at-restaurant" || bolt.phase === "to-customer";
+          setOtherPlatformJobs(hasBoltJob);
+        } catch {}
+      } else {
+        setOtherPlatformJobs(false);
+      }
+    };
+    
+    checkOtherPlatform();
+    const interval = setInterval(checkOtherPlatform, 2000); // Check every 2 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (phase === "offline") {
@@ -1356,6 +1820,15 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     if (activeJobsCount >= 3) return; // Max 3 jobs at a time
     // Don't spawn if already selecting an order
     if (phaseRef.current === "selecting") return;
+    // BLOCK: Can't get Uber jobs if Bolt has active job
+    if (otherPlatformJobs) {
+      // Show notification that Bolt is active
+      setShowCashOutMsg("🔒 Bolt is active - Finish Bolt job first!");
+      setTimeout(() => setShowCashOutMsg(""), 3000);
+      // Schedule next check in 30 seconds
+      startCooldown(30, () => { if (phaseRef.current !== "offline") spawnOrders(); });
+      return;
+    }
 
     const rankName = getRank(tripCount).name;
 
@@ -1404,6 +1877,12 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     setAvailableOrders([]);
     setSelectedOrderCard(null);
     setCooldownSec(0);
+    // UNLOCK: Clear platform lock when going offline
+    if (activeJobsCount === 0) {
+      setActivePlatform(null);
+      setPlatformLocked(false);
+      localStorage.removeItem("uber_platform_active");
+    }
     playTap();
   }
 
@@ -1414,6 +1893,10 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     setAvailableOrders([]);
     setActiveOrder(order);
     setActiveJobsCount(c => c + 1); // Increment active jobs
+    // LOCK: Set Uber as active platform to block Bolt
+    setActivePlatform("uber");
+    setPlatformLocked(true);
+    localStorage.setItem("uber_platform_active", "true");
     phaseRef.current = "to-restaurant";
     setPhase("to-restaurant");
     progressRef.current = 0;
@@ -1465,17 +1948,71 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
           setPhase("delivered");
           const tip = pick(TIPS);
           setCurrentTip(tip);
-          const earned = parseFloat((order.total + tip).toFixed(2));
+          
+          // Calculate wait time pay
+          const waitPay = calculateWaitTimePay(restaurantWaitTime > 0 ? restaurantWaitTime : 0);
+          
+          // Earnings breakdown
+          const baseFare = order.total - (order.surgeMultiplier > 1 ? order.total * (1 - 1/order.surgeMultiplier) : 0);
+          const surgeAmount = order.surgeMultiplier > 1 ? order.total - baseFare : 0;
+          const earned = parseFloat((order.total + tip + waitPay).toFixed(2));
+          
+          setLastEarningsBreakdown({
+            baseFare: parseFloat(baseFare.toFixed(2)),
+            tip: tip,
+            surge: parseFloat(surgeAmount.toFixed(2)),
+            questBonus: 0,
+            waitTimePay: waitPay,
+            total: earned
+          });
+          
           setCashOutBalance(prev => parseFloat((prev + earned).toFixed(2)));
           setTodayEarnings(prev => parseFloat((prev + earned).toFixed(2)));
           setTotalEarnings(prev => parseFloat((prev + earned).toFixed(2)));
           setActiveJobsCount(c => Math.max(0, c - 1)); // Decrement active jobs
           const newCount = tripCount + 1;
           setTripCount(newCount);
+          
+          // Update quest progress
+          let questBonus = 0;
+          setActiveQuests(prev => prev.map(q => {
+            if (q.type === "trips" || q.type === "consecutive") {
+              const newProgress = q.progress + 1;
+              if (newProgress >= q.target && q.progress < q.target) {
+                questBonus += q.reward;
+                setTimeout(() => setShowQuestComplete(q), 500);
+              }
+              return { ...q, progress: newProgress };
+            }
+            return q;
+          }));
+          
+          if (questBonus > 0) {
+            setLastEarningsBreakdown(prev => prev ? { ...prev, questBonus, total: prev.total + questBonus } : null);
+            setCashOutBalance(prev => parseFloat((prev + questBonus).toFixed(2)));
+            setTodayEarnings(prev => parseFloat((prev + questBonus).toFixed(2)));
+          }
+          
+          // Generate customer rating
+          const ratingStars = Math.random() < 0.7 ? (Math.random() < 0.6 ? 5 : 4) : (Math.random() < 0.5 ? 3 : 5);
+          const comments = ["Great service!", "Fast delivery, thanks!", "Professional driver", "Food was still hot!", "Perfect!", "Friendly driver", "Quick and efficient", "Thanks for the smooth delivery!"];
+          const newRating: Rating = {
+            id: `rating-${Date.now()}`,
+            customerName: order.customer.name,
+            stars: ratingStars,
+            comment: pick(comments),
+            date: new Date().toLocaleDateString(),
+            tip: tip
+          };
+          setCurrentRating(newRating);
+          setRatings(prev => [newRating, ...prev].slice(0, 50));
+          
           const prevRank = getRank(tripCount);
           const newRank = getRank(newCount);
           if (newRank.name !== prevRank.name) { setRankedUp(newRank); playRankUp(); }
           else { setRankedUp(null); playDelivered(); }
+          
+          setTimeout(() => setShowRatingModal(true), 1000);
         }
       }
     }, stepTime);
@@ -1497,9 +2034,49 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
   }
 
   function handleNextAfterDelivery() {
+    const remainingJobs = activeJobsCount - 1;
+    setActiveJobsCount(remainingJobs);
+    // UNLOCK: If no more jobs, clear platform lock
+    if (remainingJobs <= 0) {
+      setActivePlatform(null);
+      setPlatformLocked(false);
+      localStorage.removeItem("uber_platform_active");
+    }
     setActiveOrder(null);
     phaseRef.current = "online";
     setPhase("online");
+    const cooldownSecs = Math.floor(rand(5, 9));
+    startCooldown(cooldownSecs, () => { if (phaseRef.current === "online") spawnOrders(); });
+  }
+
+  function handleCancelOrder(reason: string) {
+    // Cancel current order with reason
+    setShowCashOutMsg(`❌ Order cancelled: ${reason}`);
+    setTimeout(() => setShowCashOutMsg(""), 3000);
+    
+    // Clear timers
+    if (moveInterval.current) clearInterval(moveInterval.current);
+    if (restaurantWaitTimerRef.current) clearInterval(restaurantWaitTimerRef.current);
+    
+    // Decrement job count
+    const remainingJobs = activeJobsCount - 1;
+    setActiveJobsCount(remainingJobs);
+    setActiveOrder(null);
+    
+    // UNLOCK if no more jobs
+    if (remainingJobs <= 0) {
+      setActivePlatform(null);
+      setPlatformLocked(false);
+      localStorage.removeItem("uber_platform_active");
+    }
+    
+    phaseRef.current = "online";
+    setPhase("online");
+    setIsWaitingAtRestaurant(false);
+    setRestaurantWaitTime(0);
+    playDecline();
+    
+    // Schedule next order
     const cooldownSecs = Math.floor(rand(5, 9));
     startCooldown(cooldownSecs, () => { if (phaseRef.current === "online") spawnOrders(); });
   }
@@ -1528,8 +2105,13 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
     <div style={{ display: "flex", flexDirection: "column", height: "100dvh", fontFamily: "'Inter',-apple-system,sans-serif", background: "#f2efe9", overflow: "hidden" }}>
 
       {showVerification && <VerificationModal profile={profile} onSuccess={() => setShowVerification(false)} onFail={() => { setShowVerification(false); handleGoOffline(); }} />}
+      
+      {/* New Uber Features Modals */}
+      <RatingModal rating={currentRating} isOpen={showRatingModal} onClose={() => setShowRatingModal(false)} />
+      <QuestCompleteModal quest={showQuestComplete} isOpen={!!showQuestComplete} onClose={() => setShowQuestComplete(null)} />
+      <EarningsBreakdownModal breakdown={lastEarningsBreakdown} isOpen={showEarningsBreakdown} onClose={() => setShowEarningsBreakdown(false)} />
 
-      <SideMenu isOpen={sideMenuOpen} profile={profile} earnings={cashOutBalance} todayEarnings={todayEarnings} tripCount={tripCount} totalCashedOut={totalCashedOut}
+      <SideMenu isOpen={sideMenuOpen} profile={profile} earnings={cashOutBalance} todayEarnings={todayEarnings} tripCount={tripCount} totalCashedOut={totalCashedOut} activeQuests={activeQuests} ratings={ratings}
         onClose={() => setSideMenuOpen(false)} onUpdateProfile={handleUpdateProfile}
         onCashOut={handleCashOut} stateKey={stateKey} />
 
@@ -1554,6 +2136,12 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
             </button>
 
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {/* Platform Lock Indicator */}
+              {(platformLocked || activePlatform === "uber") && (
+                <div style={{ background: "#06C167", borderRadius: 20, padding: "8px 14px", boxShadow: "0 2px 10px rgba(0,0,0,0.18)" }}>
+                  <div style={{ color: "#fff", fontWeight: 900, fontSize: 13 }}>🔒 UBER ACTIVE</div>
+                </div>
+              )}
               {busyZones.length > 0 && phase !== "offline" && (
                 <div style={{ background: "#FF6D00", borderRadius: 20, padding: "8px 14px", boxShadow: "0 2px 10px rgba(0,0,0,0.18)" }}>
                   <div style={{ color: "#fff", fontWeight: 900, fontSize: 13 }}>⚡ {maxMultiplier.toFixed(1)}×</div>
@@ -1565,6 +2153,9 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
               </div>
             </div>
           </div>
+
+          {/* Quest Tracker Panel */}
+          {phase !== "offline" && <QuestPanel quests={activeQuests} />}
 
           {/* Busy zone labels */}
           {phase !== "offline" && busyZones.map(z => (
@@ -1930,7 +2521,7 @@ export default function Game({ profile: initialProfile, stateKey }: { profile: D
             </div>
           )}
 
-          {phase === "at-restaurant" && activeOrder && <PickupPanel order={activeOrder} onPickedUp={handlePickedUp} waitTimeLeft={restaurantWaitTime} isWaiting={isWaitingAtRestaurant} />}
+          {phase === "at-restaurant" && activeOrder && <PickupPanel order={activeOrder} onPickedUp={handlePickedUp} waitTimeLeft={restaurantWaitTime} isWaiting={isWaitingAtRestaurant} onCancel={handleCancelOrder} />}
           {phase === "delivered" && activeOrder && <DeliveredPanel order={activeOrder} tip={currentTip} rankedUp={rankedUp} onNext={handleNextAfterDelivery} />}
         </>
       )}
